@@ -1,0 +1,85 @@
+Types:
+# All types begin with {} on the outermost level.
+# {} is like a tuple. It must have fixed size but can have different elements
+# with different types.
+{
+    # The type of the widget list at the top
+    {
+        # TODO this is ambiguous enough that it should be filled in.
+        ...
+    }
+    # The type of the list of processes
+    {
+        # [] is like a list. It can have known or unknown size but elements must
+        # have the same type
+        [
+            # ! is interactive
+            !{ Table
+                # -thing: thing means set some option on the type. They are
+                # applied to whatever came last in the tuple.
+                -cols: {
+                    PID -> {Number}
+                    USER -> {String}
+                    PRI -> {Number}
+                    NI -> {Number}
+                    VIRT -> {Number -unit: Byte}
+                    ...
+                    TIME -> {Time -precision: seconds}
+                    ...
+                }
+            }
+            # This means the list has unknown length in the down direction.
+            # The ??? could also go on top or both.
+            ???
+        ]
+    }
+    # The F bar
+    {
+        "Help" -> {...}
+        "Setup" -> {...}
+    }
+}
+
+Styles:
+# Anything inside of the first child of root that has the Number type also has
+# the align flag set.
+root[1]*{Number -*} = {Number -align: right -*}
+
+Data:
+{
+    # Widget list
+    {
+        # TODO Not sold on this widget list structure.
+        # left column
+        {
+            {
+                ...
+            }
+        }
+        # right column 
+        ...
+    }
+    # Process list
+    {
+        [
+            *{
+                PID -> "12345"
+                USER -> "jack"
+                PRI -> "20"
+                NI -> "0"
+                ...
+            }
+            {
+                ...
+            }
+            ...
+        ]
+    }
+    # F bar
+    {
+        "Help" -> ???
+        "Setup" -> ???
+        "Search" -> ???
+        ...
+    }
+}
