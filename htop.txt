@@ -1,85 +1,189 @@
-Types:
-# All types begin with {} on the outermost level.
-# {} is like a tuple. It must have fixed size but can have different elements
-# with different types.
-{
-    # The type of the widget list at the top
-    {
-        # TODO this is ambiguous enough that it should be filled in.
-        ...
+Data Structures:
+Tuple:
+    "{}" in the syntax below.
+    Elements of a tuple can be named.
+    If a tuple has multiple elements, each element must be a tuple.
+    If a tuple has only one element, it's element can be anything.
+        {} Can be omitted when the tuple has only one element and there aren't
+        any flags to pass.
+        Unit tuples without flags can be "joined" without changing semantics.
+    Each element in a tuple can have flags associated.
+        Flags are Nestings.
+        "-Nestings" in syntax below and are associated with whatever came previously.
+        0-infinite flags can be passed for any given value.
+
+Literals:
+    String, boolean, and number literals come from other languages.
+
+Renderers:
+    Non-quoted words are Renderers.
+    A tuple of Renderers is also a Renderer.
+    A Nesting of Renderers is also a Renderer.
+
+Nestings:
+    "Tuple: Tuple" in the syntax below.
+
+
+TUI Layout rules:
+Ways of Interacting:
+    Most painful ---------------------------- Least Painful
+    Tabbing, Shrinking, Changing Directions, Hiding nests
+
+    Tabbing means taking all siblings and adding another screen in front of
+    them to pick which sibling is visible. Like implicit nesting.
+
+    Shrinking one thing a lot is better than shrinking two things a little. If
+    multiple things must be shrunk, they will be shrunk in equal proportions.
+    All else equal, nested things are more likely to be shrunk.
+
+    Changing directions is only possible when the new direction allows more
+    content to be shown.
+
+Interactive:
+    A data structure can be marked with ! to make it interactive. A tuple that
+    is marked as interactive can just be clicked on. A renderer that gets marked
+    as interactive can request more complicated schemes. For example, an
+    interactive string is editable.
+
+
+Renderer definition:
+By convention, each program defines a renderer. A renderer cannot be changed
+without restarting everything using the renderer. If you really want
+something to change at runtime, you can use "Dynamic". When a program starts,
+it specifies a renderer to run. The renderer definition happens at install time.
+Since tuples of Renderers are themselves Renderers, a program could just send
+the entire data structure again every time it starts up.
+
+Renderers are checked/rendered recursively. The root renderer is in charge of
+passing its content on to children. A powerful renderer would be "Exe -run:
+path" which asks an external program to render something. The external program
+can have 2-way communication with the main program.
+
+# Htop is creating this renderer at install time.
+Htop {
+
+    Dashboard {
+        {
+            LeftCol {Dynamic}
+            RightCol {Dynamic}
+        } -ForceDir: "Horizontal"
     }
-    # The type of the list of processes
-    {
-        # [] is like a list. It can have known or unknown size but elements must
-        # have the same type
-        [
-            # ! is interactive
-            !{ Table
-                # -thing: thing means set some option on the type. They are
-                # applied to whatever came last in the tuple.
-                -cols: {
-                    PID -> {Number}
-                    USER -> {String}
-                    PRI -> {Number}
-                    NI -> {Number}
-                    VIRT -> {Number -unit: Byte}
+
+    Content {
+        Help {Icon}: {RichText}
+        Setup {Icon}: {
+            Meters {String}: {
+                Left {String}:
+                    {!List -type: {String -maxChar: 30} -averageMaxSize: 33}
+                Right {String}:
+                    {!List -type: {String -maxChar: 30} -averageMaxSize: 33}
+                Available {String}:
+                    {List -type: !{String -maxChar: 30} -averageMaxSize: 33}
+            }
+
+            DisplayOptions {String}: {List -type: {!CheckBox} -size: 14}
+            Colors {String}: {List -type: {!CheckBox} -size: 7}
+            Columns {String}: {
+                Active {String}:
+                    {List -type: !{String -maxChar: 15}}
+                Available {String}:
+                    {List -type: !{String -maxChar: 15} -size: 53}
+            }
+        }
+        # The type of the list of processes
+        ProcessList {Icon}: {
+            # The size parameter is omitted and defaults to infinity.
+            { Table -filter: true -search: true -colSort: true
+                -colsType: !{
+                    PID: {Number}
+                    USER: {String}
+                    PRI: {!Number}
+                    NI: {!Number}
+                    VIRT: {Number -unit: "Byte"}
                     ...
-                    TIME -> {Time -precision: seconds}
+                    TIME: {Time -precision: "Seconds"}
                     ...
                 }
+                -uniformCols: {String}
             }
-            # This means the list has unknown length in the down direction.
-            # The ??? could also go on top or both.
-            ???
-        ]
+        }
     }
-    # The F bar
-    {
-        "Help" -> {...}
-        "Setup" -> {...}
-    }
+
 }
 
-Styles:
-# Anything inside of the first child of root that has the Number type also has
-# the align flag set.
-root[1]*{Number -*} = {Number -align: right -*}
 
 Data:
 {
-    # Widget list
-    {
-        # TODO Not sold on this widget list structure.
-        # left column
+
+    Dashboard {
         {
+            LeftCol {
+                Renderer: {...}
+                Data: {...}
+            }
+            RightCol {
+                Renderer: {...}
+                Data: {...}
+            }
+        } -ForceDir: "Horizontal"
+    }
+
+    Content {
+        Help {icon: "/usr/share/.../q-mark.png" name: "Help"}: "..."
+        Setup {icon: "/usr/share/.../gear.png" name: "Setup"}: {
+            Meters "Meters": {
+                Left "Left Column":
+                    {
+                        "CPUs (1&2/4) [Bar]"
+                        ...
+                    }
+                Right "Right Column":
+                    {
+                        "CPUs (3&4/4) [Bar]"
+                        ...
+                    }
+                Available "Available":
+                    {
+                        "Time"
+                        ...
+                    }
+            }
+
+            DisplayOptions "Display Options": {...}
+            Colors "Colors": {...}
+            Columns "Columns": {
+                Active "Active":
+                    {...}
+                Available "Inactive":
+                    {...}
+            }
+        }
+        ProcessList {icon: "/usr/share/.../List.png" name: "ProcessList"}: {
             {
+                uniform: "End Process"
+                {
+                    PID: 50
+                    USER: "Jack"
+                    PRI: "2"
+                    NI: "0"
+                    VIRT: "100000"
+                    ...
+                    TIME: "1980234" #<- Unix time stamp
+                    ...
+                }
+                {
+                    PID: 51
+                    USER: "Jack"
+                    PRI: "2"
+                    NI: "0"
+                    VIRT: "100000"
+                    ...
+                    TIME: "19804" #<- Unix time stamp
+                    ...
+                }
                 ...
             }
         }
-        # right column 
-        ...
     }
-    # Process list
-    {
-        [
-            *{
-                PID -> "12345"
-                USER -> "jack"
-                PRI -> "20"
-                NI -> "0"
-                ...
-            }
-            {
-                ...
-            }
-            ...
-        ]
-    }
-    # F bar
-    {
-        "Help" -> ???
-        "Setup" -> ???
-        "Search" -> ???
-        ...
-    }
+
 }
