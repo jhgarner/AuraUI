@@ -1,0 +1,90 @@
+DiscordChannel {
+}
+DiscordServer {
+  ShortName {String}: {
+    FullName {String}: {List -type: {Icon -labelSemantic: "Essential"} -size: 9}
+    {List -type: {DiscordChannel}}
+  }
+}
+Discord {
+  Me {AnimIcon}: {
+    ...
+  }
+
+
+}
+
+
+{
+  {ExpandingIcon -icon: "discord.com/icon/big"} ->
+  {
+    ...
+  }
+  [
+    "MGAM" -> 
+      {
+        {name: "general", !invite: "s3.a.b", ...} ->
+          {
+            {[sign: "s3.com/hashtag.png", name: "general"], [!bell: "s3.com/bell.png, ...]}
+            [
+              ???,
+              {avatar: "s3.aws.com/discord/jkrmnj", userName: "jkrmnj", Date: "Today"} ->
+                ["Test", "Message 2", "M3"],
+              {avatar: "s3.aws.com/discord/Zatton", userName: "Zatton", Date: "Yesterday"} ->
+                ["Another Test\n\ntest"]
+            ],
+            {!attach: "s3.com", *!message: "", ...}
+          }
+        "idk" -> ???
+      }
+    "MMS" -> ???
+  ]
+  [
+    "New" ->
+    {
+      ...
+    }
+    "Search" ->
+    {
+      ...
+    }
+  ]
+}
+
+
+
+{
+  "Dashboard" ->
+  {
+    ...
+  }
+  [
+    "MGAM" -> 
+      {
+        {name: "general", !invite: "s3.a.b", ...} ->
+          {
+            {[sign: "s3.com/hashtag.png", name: "general"], [!bell: "s3.com/bell.png, ...]}
+            [
+              ???,
+              {avatar: "s3.aws.com/discord/jkrmnj", userName: "jkrmnj", Date: "Today"} ->
+                ["Test", "Message 2", "M3"],
+              {avatar: "s3.aws.com/discord/Zatton", userName: "Zatton", Date: "Yesterday"} ->
+                ["Another Test\n\ntest"]
+            ],
+            {!attach: "s3.com", *!message: "", ...}
+          }
+        "idk" -> ???
+      }
+    "MMS" -> ???
+  ]
+  [
+    "New" ->
+    {
+      ...
+    }
+    "Search" ->
+    {
+      ...
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+Style parameters are just additional pieces of data attached to an element.
+There are a handful of ways to specify them.
+
+1. As properties on the element.
+2. As defaults in a renderer
+3. As overrides in a separate place
+
+Developers are the only people that can change number 1. Developers have no
+control over number 2 and only partial control over 3. Although overrides can
+come from a developer (for example, to establish app wide font choices), the
+user can always override them.
+
+If a property is applied to something but not expected, it is simply ignored by
+the renderer.
+
+Properties include things like colors, fonts, image url, etc.
+
+Properties can also be used to specify whether things should try to autohide or
+if they should prefer wrapping over scrolling.
