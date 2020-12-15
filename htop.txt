@@ -1,235 +1,200 @@
-Data Structures:
-Tuple:
-    "{}" in the syntax below.
-    Elements of a tuple can be named.
-    If a tuple has multiple elements, each element must be a tuple.
-    If a tuple has only one element, its element can be anything.
-        {} Can be omitted when the tuple has only one element and there aren't
-        any flags to pass.
-        Unit tuples without flags can be "joined" without changing semantics.
-        For example {{{5}}} is the same as {5} which is the same as 5 with
-        syntactic sugar.
-    Each element in a tuple can have flags associated with it.
-        Flags look like nestings in a tuple except they begin with a dash.
-        0 or more flags can be passed for any given value.
+This is an example of what Htop might look like. It uses a fake (inconsistent)
+syntax for describing the schema/type of htop. A similar syntax is used for
+sending the actual data.
 
-Literals:
-    String, boolean, and number literals look and act like other languages.
+Try not to focus too hard on the syntax. Instead, focus on the semantics of the
+various statements. Although it won't be consistent either, it should be useful.
+
+There are two main goals with this format:
+
+1. The schema should look like something you would create in a backend with very
+little of the layout/style poking through.
+
+2. The schema should preserve the developers intention. This is particularly
+present in the help/setup sections at the end of this text file.
 
 
-Sums:
-    To pick between two data types, use | between them.
-    This should not be used to create different screens.
-    It should be used to represent data that can have different fields.
-    Like anything else in here, DO NOT mutate data to create UI.
-
-Renderers:
-    Non-quoted words are Renderers.
-    A tuple of Renderers is also a Renderer.
-    A Nesting of Renderers is also a Renderer.
-
-Nestings:
-    "Tuple: Tuple" in the syntax below.
-    Nested usually refers to the thing on the right of the colon.
+I don't think this format accomplishes those goals, but it seems like a cool
+experiment/stepping stone towards something cool.
 
 
-Sizing rules:
-    The focused element and all ancestors get sizing preference.
-    Anything hidden must still be accessible using the rules in TUI layout.
+The scheme/type:
+
+# A comment.
+# A data type with a single constructor broken across multiple
+# lines
+# The first word is the constructor name and the rest define parameters
+# Each parameter of the constructor is named.
+Widget = ProcessorUsage (n Int) (pct Double)
+       | MemoryUsage (used Double) (total Double)
+       | Tasks (numTasks Int) (thr Int) (numRunning Int)
+       | ...
+
+ProcessorUsage display as
+    {fstring -string "$n", ProgressBar -percent pct}
+
+MemoryUsage display as
+    {fstring -string "Mem", ProgressBar -numerator used -denominator total}
+
+Tasks display as
+    fstring -string "Tasks: $numTasks, $thr thr; $numRunning running"
 
 
-TUI Layout rules:
-Ways of Interacting as screens get smaller:
-    Most painful ---------------------------- Least Painful
-    Tabbing, Shrinking, Changing Directions, Hiding nests
-
-    Tabbing means taking all siblings and adding another screen in front of
-    them to pick which sibling is visible. Like implicit nesting.
-
-    Shrinking one thing a lot is better than shrinking two things a little. If
-    multiple things must be shrunk, they will be shrunk in equal proportions.
-    All else equal, nested things are shrunk before others.
-
-    Changing directions is only possible when the new direction allows more
-    content to be shown.
-    
-    Hiding Nests means hiding the content to the right of a colon.
-
-Examples of deterministic UI choices:
-    If there's a tuple of kv pairs/lists of kv pairs, they can be merged.
-
-Interactive:
-    A data structure can be marked with ! to make it interactive. A tuple that
-    is marked as interactive can just be clicked on. A renderer that gets marked
-    as interactive can request more complicated schemes. For example, an
-    interactive string is editable. For syntactic sugar purposes, the ! remains
-    inside any implicitly inserted tuples
-
-HighFocus:
-    If something is marked high focus, then it is assumed having multiple of
-    them on the screen will be confusing to the user.
-    You can mark something as high focus with !!. This is because something with high
-    focus must also be interactive.
-
-Renderer definition:
-By convention, each program defines a renderer. A renderer cannot be changed
-without restarting everything using the renderer. If you really want
-something to change at runtime, you can use "Dynamic". When a program starts,
-it specifies a renderer to run. Renderers can be added to Aura by programs when
-they start or are installed.
-
-Renderers are checked/rendered recursively. Renderer implementations are in
-charge of passing their content on to children. Tho most powerful renderer is
-called "Exe". It can be used like "Exe -run: path" which asks an external
-program to render something. The external program can have 2-way communication
-with Aura.
-
-syntactic sugar:
-    _thing turns into a static resource useful for translations.
-    By default, unit types are displayed as _Constructor
-
-
-An example:
-
-Styles {
-    Bar | Graph | Text
-}
-
-Style {String} display as
-    {fstring -string: "[$Style]"}
-
-WhichCol { Left | Right } display as
-    {case -on: WhichCol
-        -WhichCol.Left: {fstring -string: "$_Left $_Column"}
-        -WhichCol.Right: {fstring -string: "$_Right $_Column"}
-    }
-
-Widget {
-    UseCase !{Used {!WhichCol} | Unused}
-    Content {Name {String --TODO SIZE}: Description {String --TODO SIZE}}
-    Style {case -on: Widget.UseCase
-        -Used: {}
-        -Unused: {!Style}
-    }
-} display as
-    { Widget.UseCase
-    , { case -on: Widget.UseCase
-            -Widget.UseCase.Used: Widget.Content.Name
-            -Widget.UseCase.Unused: Widget.Content
-        }
-    , Widget.Style
-    }
-
-Process {
-    PID {Number}
-    USER {String}
-    PRI {!Number}
-    NI {!Number}
-    VIRT {Number -unit: "Byte"}
+Process = ProcessC
+    (PID Ind)
+    (USER String)
+    # The ! means that the user can change the integer
+    # Even if ProcessC as a whole isn't marked as interactive, this element will
+    # be.
+    (PRI !Int)
+    (NI !Int)
+    (VIRT Int -unit: "Byte")
     ...
-    TIME {Time -precision: "Seconds"}
+    (TIME Time -precision: "Seconds")
     ...
-}
 
+# If a Process is marked as interactive, treat it like an interactive unit type.
+# That means the only thing you can do to it is click on it.
+Process Interact as
+    # the action flag provides a name for the interaction.
+    {} -action "End Process"
+
+# Help should be embedded into the UI to improve accessibility, not given as a
+# separate page. For that reason, help is missing.
+# Setup should also exist somewhat on its own instead of being part of the main
+# UI.
 Htop {
+    # The mostlyConst flag tells the renderer that the list of widgets is
+    # dynamic, but that changes are allowed to reflow the entire UI. This lets the
+    # renderer delay the UI flow until it has received the contents of the
+    # Dashboard. Without the mostlyConst flag, the renderer would have to assume
+    # the worst possible case and flow the entire UI around that. Normally, a
+    # change in data shouldn't change the flow of the UI. The only thing that can
+    # change the flow is a change in the window size.
+    Dashboard ![Widget] -mostlyConst
 
-    Dashboard {
-        LeftCol {Dynamic}
-        RightCol {Dynamic}
-    }
-
-    Content {
-        Help {Icon}: {RichText}
-        Setup {Icon}: {
-            Meters {String}: {![Widget] -canReorder: true -groupBy: Widget.UseCase}
-
-            DisplayOptions {String}: {[!CheckBox]}
-            Colors {String}: {[!CheckBox]}
-            Columns {String}: {
-                Active {String}:
-                    [!{String}]
-                Available {String}:
-                    [!{String}]
-            }
-        }
-
-        # The type of the list of processes
-        {[Process] -filter: true -search: true -colSort: true}
-    }
+    # Process in marked as interactive. Per the "Interact as" field above, this
+    # means the process can be ended. Note that we aren't creating a button to end
+    # the process. A renderer might create the button, or generate a CLI flag for
+    # triggering the action.
+    ProcessList {[!Process] -filter: true -search: true -colSort: true}
 }
 
 
 Data:
 {
+    Dashboard
+        [ ProcessorUsage 1 2.6
+        , ProcessorUsage 2 3.5
+        , ProcessorUsage 3 1.0
+        , ProcessorUsage 4 100.0
+        , MemoryUsage 3.07 15.5
+        , Tasks 111 400 1
+        ]
 
-    Dashboard {
-        {
-            LeftCol {
-                Renderer: {...}
-                Data: {...}
-            }
-            RightCol {
-                Renderer: {...}
-                Data: {...}
-            }
-        }
-    }
-
-    Content {
-        Help {icon: "/usr/share/.../q-mark.png" name: "Help"}: "..."
-        Setup {icon: "/usr/share/.../gear.png" name: "Setup"}: {
-            Meters "Meters": {
-                Left "Left Column":
-                    {
-                        "CPUs (1&2/4) [Bar]"
-                        ...
-                    }
-                Right "Right Column":
-                    {
-                        "CPUs (3&4/4) [Bar]"
-                        ...
-                    }
-                Available "Available":
-                    {
-                        "Time"
-                        ...
-                    }
-            }
-
-            DisplayOptions "Display Options": {...}
-            Colors "Colors": {...}
-            Columns "Columns": {
-                Active "Active":
-                    {...}
-                Available "Inactive":
-                    {...}
-            }
-        }
-        ProcessList {icon: "/usr/share/.../List.png" name: "ProcessList"}: {
-            {
-                uniform: "End Process"
-                {
-                    PID: 50
-                    USER: "Jack"
-                    PRI: "2"
-                    NI: "0"
-                    VIRT: "100000"
-                    ...
-                    TIME: "1980234" #<- Unix time stamp
-                    ...
-                }
-                {
-                    PID: 51
-                    USER: "Jack"
-                    PRI: "2"
-                    NI: "0"
-                    VIRT: "100000"
-                    ...
-                    TIME: "19804" #<- Unix time stamp
-                    ...
-                }
-                ...
-            }
-        }
-    }
+    ProcessList
+        [ ProcessC
+            PID 50,
+            USER "Jack",
+            PRI "2",
+            NI "0",
+            VIRT "100000",
+            ...
+            TIME "1980234", #<- Unix time stamp
+            ...
+        , ProcessC
+            PID 51,
+            USER "Jack",
+            PRI "2",
+            NI "0",
+            VIRT "100000",
+            ...
+            TIME "19804", #<- Unix time stamp
+            ...
+        ...
+        ]
 }
+
+How does it do it?
+
+Dashboard:
+Since the dashboard is mostly constant, we can analyze the data to decide how
+much space it should take up. Normally, we would have to assume that it might be
+empty one second and filled with a million elements the next. Now though, we can
+see that it only has a handful of elements and assign it a specific width and
+height.
+
+Process list:
+We might have an infinite number of processes with infinitely long columns. This
+list will ask for 100% width and 100% height. Since strings can be arbitrarily
+long, we'll orient the list vertically to avoid weird horizontal scrolling.
+
+Should the dashboard be to the left or above the process list? Since we know
+more about the dashboard, we'll focus on that one. Since the text largely fits
+on half a screen and progress bars don't get a lot of benefit from being
+exceptionally wide, we can likely orient the dashboard list as a kind of grid.
+After doing that, We can see that the width of the dashboard is larger than the
+height. It also can use 100% of the width but can't use 100% of the height. That
+means we can give the process list (which asks for 100% in both dimensions) more
+of its requested space and we can avoid excessive whitespace by arranging things
+vertically.
+
+Although the above paragraph is pretty handwavy, it hopefully gives an idea
+about why a renderer might pick a certain orientation for elements. Imagine if
+the dashboard were extremely large and none of the elements were very wide. If
+the terminal screen were large enough, it might make sense to put the dashboard
+horizontal to the process list and have it scroll vertically parallel to the
+process list.
+
+
+
+What's different?
+
+Instead of faithfully recreating the htop interface, I will instead make a case
+that the existing interface is suboptimal and that the version described above
+improves upon it. The process list stays mostly the same, but the dashboard has
+gotten a big change.
+
+First, the dashboard doesn't scale as your terminal width changes. That means
+text will get cut off and become unreadable because it's trying to fit two
+columns into a space where only one is available. It also doesn't scale up.
+Instead, it makes the progress bars really large which doesn't provide that much
+more information. The text based items don't get any extra information and just
+waste a lot of space. In addition, imagine if you had a translation that made
+some of the textual representations extremely large. In that case, you wouldn't
+want two columns because it would cut off text.
+
+This description also moves the help and setup into a separate (unwritten) part
+of the standard. The current help page reads like a colorful man page. Although
+useful, it could be improved. For one, it disconnects the help text from the
+elements it provides help for. This hurts discoverability and accessibility.
+Imagine a user that's interacting with the computer in a non-standard way. If
+a piece of help text were associated with the button or element it provided help
+for, then a screen reader could provide context on how the element could be
+used.
+
+Moving help text to a more generic format has other benefits. You could use it
+to generate help pages in a variety of formats (man page, html doc, pdf, etc.),
+you could provide animations or automatically generated screenshots, or you
+could use it to create a form of macros.
+
+To explain the macro comment a bit more, imagine if you search through the help
+page for how to do X. In most systems, you now have to switch between multiple
+windows to follow the steps. Instead, you could click a button on the help page
+and the app would actually show you how to navigate to and use the feature you
+want.
+
+The setup is also unwritten. Basically, it's a separate piece of data that the
+renderer will integrate with your UI somehow. Apps can use the renderer protocol
+to extract the settings at startup and adjust behavior accordingly. One cool
+benefit is that programs no longer have to deal with argument parsing or reading
+config file formats. From a user's point of view, all configuration will be saved
+in plain text in an easy to find location by the renderer. You could toss some
+kind of syncing on that directory to get your preferences shared across devices.
+
+This also lets you control how preferences are loaded. If the program didn't use
+this UI system, it might not support sharing one config file across devices. For
+example, you might have one setting turned on for you phone but off on your
+desktop. The rest of the settings are the same. The renderer could detect which
+device you're using and send different options based on how you've configured
+it.

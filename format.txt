@@ -1,0 +1,80 @@
+Data Structures:
+
+The magic data structure:
+    This thing pulls a lot of weight
+    It might make sense to split it up
+    Essentially, they're tuples/dictionaries with extra stuff
+    The data structure can be named
+        Syntax: Name {...}
+        Names are never displayed to users
+
+    
+
+    The tuple side of things:
+    Syntax: {a, b, ...} where ... can be more elements
+    {{{5}}} is the same as {5} which is the same as 5
+    Tuples are either fixed length or dynamic length
+    Dynamic syntax: {a?, b*, c+, d|e}
+    Basically, it looks like a regular expression of types
+
+    Flags:
+    Syntax: {a -flag value -flag2 value2 ..., b -flagb valueb, ...}
+    Flags apply to whatever they're to the right of
+    Flags must be strings but value can be anything
+
+    Nestings:
+    Syntax: {outer: inner, ...}
+    Both outer and inner can have flags associated with them
+
+
+Literals:
+    String, boolean, and number literals look and act like other languages.
+
+
+TUI Layout rules:
+Ways of Interacting as screens get smaller:
+    Most painful ---------------------------- Least Painful
+    Tabbing, Shrinking, Changing Directions, Hiding nests
+
+    Tabbing means taking all siblings and adding another screen in front of
+    them to pick which sibling is visible. In other words, it adds tabs to a UI
+    that didn't necessarily want it.
+
+    Shrinking one thing a lot is better than shrinking two things a little. If
+    multiple things must be shrunk, they will be shrunk in equal proportions.
+    All else equal, nested things are shrunk before others.
+
+    Changing directions is only possible when the new direction allows more
+    content to be shown.
+    
+    Hiding Nests means hiding the content to the right of a colon.
+
+
+Interactive:
+    A data structure can be marked with ! to make it interactive. A tuple that
+    is marked as interactive can just be clicked on. A renderer that gets marked
+    as interactive can request more complicated schemes. For example, an
+    interactive string is editable. Flags passed to the renderer can change how
+    the interaction works.
+
+Distracting:
+    An element marked with !! is interactive and distracting. Showing multiple
+    distracting elements to the user is not a good idea. App creators should
+    create distracting elements somewhat sparingly.
+
+Renderer definition:
+By convention, each program defines a renderer. A renderer cannot be changed
+without restarting everything using the renderer. If you really want
+something to change at runtime, you can use "Dynamic". When a program starts,
+it specifies a renderer to run. Renderers can be added to by programs when
+they start or are installed.
+
+Renderers are checked/rendered recursively. Renderer implementations are in
+charge of passing their content on to children. Tho most powerful renderer is
+called "Exe". It can be used like "Exe -run: path" which asks an external
+program to render something. The external program can have 2-way communication.
+
+syntactic sugar:
+    _thing turns into a static resource useful for translations.
+    The renderer will gather some info from the system and ask the program to provide
+    the strings once at startup.
