@@ -1,18 +1,30 @@
+
+
 DiscordChannel {
 }
+
 DiscordServer {
   ShortName {String}: {
-    FullName {String}: {List -type: {Icon -labelSemantic: "Essential"} -size: 9}
+    FullName {String}:
     {List -type: {DiscordChannel}}
   }
-}
+} display as
+  # WebRender can only be used in display as blocks
+  {WebRender ...: ...}
+
 Discord {
   Me {AnimIcon}: {
     ...
   }
-
-
+  [DiscordServer]
+  Add {AnimIcon}: {
+    ...
+  }
 }
+
+
+
+
 
 
 {

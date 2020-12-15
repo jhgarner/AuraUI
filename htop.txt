@@ -3,17 +3,25 @@ Tuple:
     "{}" in the syntax below.
     Elements of a tuple can be named.
     If a tuple has multiple elements, each element must be a tuple.
-    If a tuple has only one element, it's element can be anything.
+    If a tuple has only one element, its element can be anything.
         {} Can be omitted when the tuple has only one element and there aren't
         any flags to pass.
         Unit tuples without flags can be "joined" without changing semantics.
-    Each element in a tuple can have flags associated.
-        Flags are Nestings.
-        "-Nestings" in syntax below and are associated with whatever came previously.
-        0-infinite flags can be passed for any given value.
+        For example {{{5}}} is the same as {5} which is the same as 5 with
+        syntactic sugar.
+    Each element in a tuple can have flags associated with it.
+        Flags look like nestings in a tuple except they begin with a dash.
+        0 or more flags can be passed for any given value.
 
 Literals:
-    String, boolean, and number literals come from other languages.
+    String, boolean, and number literals look and act like other languages.
+
+
+Sums:
+    To pick between two data types, use | between them.
+    This should not be used to create different screens.
+    It should be used to represent data that can have different fields.
+    Like anything else in here, DO NOT mutate data to create UI.
 
 Renderers:
     Non-quoted words are Renderers.
@@ -22,10 +30,16 @@ Renderers:
 
 Nestings:
     "Tuple: Tuple" in the syntax below.
+    Nested usually refers to the thing on the right of the colon.
+
+
+Sizing rules:
+    The focused element and all ancestors get sizing preference.
+    Anything hidden must still be accessible using the rules in TUI layout.
 
 
 TUI Layout rules:
-Ways of Interacting:
+Ways of Interacting as screens get smaller:
     Most painful ---------------------------- Least Painful
     Tabbing, Shrinking, Changing Directions, Hiding nests
 
@@ -34,81 +48,114 @@ Ways of Interacting:
 
     Shrinking one thing a lot is better than shrinking two things a little. If
     multiple things must be shrunk, they will be shrunk in equal proportions.
-    All else equal, nested things are more likely to be shrunk.
+    All else equal, nested things are shrunk before others.
 
     Changing directions is only possible when the new direction allows more
     content to be shown.
+    
+    Hiding Nests means hiding the content to the right of a colon.
+
+Examples of deterministic UI choices:
+    If there's a tuple of kv pairs/lists of kv pairs, they can be merged.
 
 Interactive:
     A data structure can be marked with ! to make it interactive. A tuple that
     is marked as interactive can just be clicked on. A renderer that gets marked
     as interactive can request more complicated schemes. For example, an
-    interactive string is editable.
+    interactive string is editable. For syntactic sugar purposes, the ! remains
+    inside any implicitly inserted tuples
 
+HighFocus:
+    If something is marked high focus, then it is assumed having multiple of
+    them on the screen will be confusing to the user.
+    You can mark something as high focus with !!. This is because something with high
+    focus must also be interactive.
 
 Renderer definition:
 By convention, each program defines a renderer. A renderer cannot be changed
 without restarting everything using the renderer. If you really want
 something to change at runtime, you can use "Dynamic". When a program starts,
-it specifies a renderer to run. The renderer definition happens at install time.
-Since tuples of Renderers are themselves Renderers, a program could just send
-the entire data structure again every time it starts up.
+it specifies a renderer to run. Renderers can be added to Aura by programs when
+they start or are installed.
 
-Renderers are checked/rendered recursively. The root renderer is in charge of
-passing its content on to children. A powerful renderer would be "Exe -run:
-path" which asks an external program to render something. The external program
-can have 2-way communication with the main program.
+Renderers are checked/rendered recursively. Renderer implementations are in
+charge of passing their content on to children. Tho most powerful renderer is
+called "Exe". It can be used like "Exe -run: path" which asks an external
+program to render something. The external program can have 2-way communication
+with Aura.
 
-# Htop is creating this renderer at install time.
+syntactic sugar:
+    _thing turns into a static resource useful for translations.
+    By default, unit types are displayed as _Constructor
+
+
+An example:
+
+Styles {
+    Bar | Graph | Text
+}
+
+Style {String} display as
+    {fstring -string: "[$Style]"}
+
+WhichCol { Left | Right } display as
+    {case -on: WhichCol
+        -WhichCol.Left: {fstring -string: "$_Left $_Column"}
+        -WhichCol.Right: {fstring -string: "$_Right $_Column"}
+    }
+
+Widget {
+    UseCase !{Used {!WhichCol} | Unused}
+    Content {Name {String --TODO SIZE}: Description {String --TODO SIZE}}
+    Style {case -on: Widget.UseCase
+        -Used: {}
+        -Unused: {!Style}
+    }
+} display as
+    { Widget.UseCase
+    , { case -on: Widget.UseCase
+            -Widget.UseCase.Used: Widget.Content.Name
+            -Widget.UseCase.Unused: Widget.Content
+        }
+    , Widget.Style
+    }
+
+Process {
+    PID {Number}
+    USER {String}
+    PRI {!Number}
+    NI {!Number}
+    VIRT {Number -unit: "Byte"}
+    ...
+    TIME {Time -precision: "Seconds"}
+    ...
+}
+
 Htop {
 
     Dashboard {
-        {
-            LeftCol {Dynamic}
-            RightCol {Dynamic}
-        } -ForceDir: "Horizontal"
+        LeftCol {Dynamic}
+        RightCol {Dynamic}
     }
 
     Content {
         Help {Icon}: {RichText}
         Setup {Icon}: {
-            Meters {String}: {
-                Left {String}:
-                    {!List -type: {String -maxChar: 30} -averageMaxSize: 33}
-                Right {String}:
-                    {!List -type: {String -maxChar: 30} -averageMaxSize: 33}
-                Available {String}:
-                    {List -type: !{String -maxChar: 30} -averageMaxSize: 33}
-            }
+            Meters {String}: {![Widget] -canReorder: true -groupBy: Widget.UseCase}
 
-            DisplayOptions {String}: {List -type: {!CheckBox} -size: 14}
-            Colors {String}: {List -type: {!CheckBox} -size: 7}
+            DisplayOptions {String}: {[!CheckBox]}
+            Colors {String}: {[!CheckBox]}
             Columns {String}: {
                 Active {String}:
-                    {List -type: !{String -maxChar: 15}}
+                    [!{String}]
                 Available {String}:
-                    {List -type: !{String -maxChar: 15} -size: 53}
+                    [!{String}]
             }
         }
-        # The type of the list of processes
-        ProcessList {Icon}: {
-            # The size parameter is omitted and defaults to infinity.
-            { Table -filter: true -search: true -colSort: true
-                -colsType: !{
-                    PID: {Number}
-                    USER: {String}
-                    PRI: {!Number}
-                    NI: {!Number}
-                    VIRT: {Number -unit: "Byte"}
-                    ...
-                    TIME: {Time -precision: "Seconds"}
-                    ...
-                }
-                -uniformCols: {String}
-            }
-        }
-    }
 
+        # The type of the list of processes
+        {[Process] -filter: true -search: true -colSort: true}
+    }
 }
 
 
@@ -125,7 +172,7 @@ Data:
                 Renderer: {...}
                 Data: {...}
             }
-        } -ForceDir: "Horizontal"
+        }
     }
 
     Content {
@@ -185,5 +232,4 @@ Data:
             }
         }
     }
-
 }
