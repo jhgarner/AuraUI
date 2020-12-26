@@ -111,3 +111,8 @@ could be thought of as the free UI structure with all other devices or platforms
 being ones you can trivially convert to. It's also like when developers say you
 can get a feature for free when using a library when you were initially only
 trying to get a different feature.
+
+## Organization
+
+The htop.txt file is pretty up to date as is this one. The rest are either out
+of date, incomplete, wrong, or dead ends.
