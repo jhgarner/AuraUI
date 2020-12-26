@@ -3,20 +3,9 @@ syntax for describing the schema/type of htop. A similar syntax is used for
 sending the actual data.
 
 Try not to focus too hard on the syntax. Instead, focus on the semantics of the
-various statements. Although it won't be consistent either, it should be useful.
-
-There are two main goals with this format:
-
-1. The schema should look like something you would create in a backend with very
-little of the layout/style poking through.
-
-2. The schema should preserve the developers intention. This is particularly
-present in the help/setup sections at the end of this text file.
-
-
-I don't think this format accomplishes those goals, but it seems like a cool
-experiment/stepping stone towards something cool.
-
+various statements. Although that won't be consistent either, it hopefully
+conveys the thought process behind adapting htop's UI to a more flexible,
+declarative system.
 
 The scheme/type:
 
@@ -30,6 +19,8 @@ Widget = ProcessorUsage (n Int) (pct Double)
        | Tasks (numTasks Int) (thr Int) (numRunning Int)
        | ...
 
+# TODO I'm using constructors from the rhs here but types from the lhs other
+# times. Which makes more sense?
 ProcessorUsage display as
     {fstring -string "$n", ProgressBar -percent pct}
 
@@ -45,7 +36,7 @@ Process = ProcessC
     (USER String)
     # The ! means that the user can change the integer
     # Even if ProcessC as a whole isn't marked as interactive, this element will
-    # be.
+    # be. Interactions are sent to the backend.
     (PRI !Int)
     (NI !Int)
     (VIRT Int -unit: "Byte")
@@ -57,7 +48,7 @@ Process = ProcessC
 # That means the only thing you can do to it is click on it.
 Process Interact as
     # the action flag provides a name for the interaction.
-    {} -action "End Process"
+    () -action "End Process"
 
 # Help should be embedded into the UI to improve accessibility, not given as a
 # separate page. For that reason, help is missing.
@@ -71,13 +62,16 @@ Htop {
     # the worst possible case and flow the entire UI around that. Normally, a
     # change in data shouldn't change the flow of the UI. The only thing that can
     # change the flow is a change in the window size.
-    Dashboard ![Widget] -mostlyConst
+    # The can* flags control what a it means for a list to be editable. The
+    # renderer will automatically generate a UI for customizing the dashboard
+    # thanks to those flags.
+    Dashboard ![Widget] -mostlyConst -canAdd -canRemove -canReorder
 
     # Process in marked as interactive. Per the "Interact as" field above, this
     # means the process can be ended. Note that we aren't creating a button to end
     # the process. A renderer might create the button, or generate a CLI flag for
     # triggering the action.
-    ProcessList {[!Process] -filter: true -search: true -colSort: true}
+    ProcessList [!Process] -filter true -search true -colSort true
 }
 
 
@@ -93,6 +87,8 @@ Data:
         ]
 
     ProcessList
+        # This syntax seems like a pain to parse but it is hopefully clear to
+        # readers...
         [ ProcessC
             PID 50,
             USER "Jack",
@@ -134,10 +130,10 @@ more about the dashboard, we'll focus on that one. Since the text largely fits
 on half a screen and progress bars don't get a lot of benefit from being
 exceptionally wide, we can likely orient the dashboard list as a kind of grid.
 After doing that, We can see that the width of the dashboard is larger than the
-height. It also can use 100% of the width but can't use 100% of the height. That
-means we can give the process list (which asks for 100% in both dimensions) more
-of its requested space and we can avoid excessive whitespace by arranging things
-vertically.
+height. In addition, it can use 100% of the width but can't use 100% of the
+height. That means we can give the process list (which asks for 100% in both
+dimensions) more of its requested space and we can avoid excessive whitespace by
+arranging things vertically.
 
 Although the above paragraph is pretty handwavy, it hopefully gives an idea
 about why a renderer might pick a certain orientation for elements. Imagine if
@@ -145,6 +141,17 @@ the dashboard were extremely large and none of the elements were very wide. If
 the terminal screen were large enough, it might make sense to put the dashboard
 horizontal to the process list and have it scroll vertically parallel to the
 process list.
+
+This opens a question about how much layout shenanigans we can pull before users
+become disoriented. In the tablet/mobile world, it seem acceptable to provide
+fairly different UI's when in portrait vs landscape. In landscape you get more
+views lined up side by side instead of nested or top down. We can probably make
+a similar argument here. If a user takes a very thin window and makes it full
+screen, it should be acceptable for the layout to change as long as they can
+still find the content they were previously looking at. The layout should not
+change when an element that isn't marked "mostlyConst" changes. Whatever layout
+the renderer picks for an empty list or a short string should work the exact
+same on a million element list or a large string.
 
 
 
@@ -155,23 +162,36 @@ that the existing interface is suboptimal and that the version described above
 improves upon it. The process list stays mostly the same, but the dashboard has
 gotten a big change.
 
-First, the dashboard doesn't scale as your terminal width changes. That means
-text will get cut off and become unreadable because it's trying to fit two
+First, the original dashboard doesn't scale as your terminal width changes. That
+means text will get cut off and become unreadable because it's trying to fit two
 columns into a space where only one is available. It also doesn't scale up.
 Instead, it makes the progress bars really large which doesn't provide that much
-more information. The text based items don't get any extra information and just
-waste a lot of space. In addition, imagine if you had a translation that made
-some of the textual representations extremely large. In that case, you wouldn't
-want two columns because it would cut off text.
+more information. The text based items don't get any extra information either
+and just waste a lot of space. In addition, imagine if you had a translation
+that made some of the textual representations extremely large. In that case, you
+wouldn't want two columns because it would cut off text even with a large
+screen.
 
-This description also moves the help and setup into a separate (unwritten) part
-of the standard. The current help page reads like a colorful man page. Although
-useful, it could be improved. For one, it disconnects the help text from the
-elements it provides help for. This hurts discoverability and accessibility.
-Imagine a user that's interacting with the computer in a non-standard way. If
-a piece of help text were associated with the button or element it provided help
-for, then a screen reader could provide context on how the element could be
-used.
+In the original htop you could control which columns the dashboard widgets were
+on. Based on the above, such a feature might be an antipattern because it breaks
+the app's ability to resize itself. If the user really wanted to control which
+widgets appeared in which columns, they might need a more powerful layout
+editing tool that only applied their customization when the screen was the right
+size.
+
+
+Beyond the dashboard, there are a couple of pages in the app that are missing
+from the schema/type above. Specifically, the help and setup pages would be
+moved into an (unwritten) alternative schema. The current help page reads like
+a colorful man page. Although useful, other formats might be better depending on
+the circumstances. For one, it disconnects the help text from the elements it
+provides help for. This hurts discoverability and accessibility.  Imagine a user
+that's interacting with the computer in a non-standard way. If a piece of help
+text were associated with the button or element it provided help for, then a
+screen reader could provide context on how the element would be used. Imagine
+another user that's never used the app before. They could press "?" just like
+they do on every new TUI app to see the UI suddenly annotated with useful
+information.
 
 Moving help text to a more generic format has other benefits. You could use it
 to generate help pages in a variety of formats (man page, html doc, pdf, etc.),
@@ -179,22 +199,25 @@ you could provide animations or automatically generated screenshots, or you
 could use it to create a form of macros.
 
 To explain the macro comment a bit more, imagine if you search through the help
-page for how to do X. In most systems, you now have to switch between multiple
+pages for how to do X. In most systems, you now have to switch between multiple
 windows to follow the steps. Instead, you could click a button on the help page
 and the app would actually show you how to navigate to and use the feature you
-want.
+want. This could either be fully automated (with the computer "clicking" for
+you) or it could highlight the parts of the UI it wants you to click on next.
 
-The setup is also unwritten. Basically, it's a separate piece of data that the
-renderer will integrate with your UI somehow. Apps can use the renderer protocol
-to extract the settings at startup and adjust behavior accordingly. One cool
-benefit is that programs no longer have to deal with argument parsing or reading
-config file formats. From a user's point of view, all configuration will be saved
-in plain text in an easy to find location by the renderer. You could toss some
-kind of syncing on that directory to get your preferences shared across devices.
+The setup would be a lot like the help page. Basically, it's a separate piece of
+data that the renderer will integrate with your UI somehow. Apps can use the
+renderer protocol to extract the settings at startup and adjust behavior
+accordingly. One cool benefit is that programs no longer have to deal with
+argument parsing or reading config file formats. From a user's point of view,
+all configuration will be saved in plain text in an easy to find location by the
+renderer. You could toss some kind of syncing on that directory to get your
+preferences shared across devices.
 
 This also lets you control how preferences are loaded. If the program didn't use
 this UI system, it might not support sharing one config file across devices. For
 example, you might have one setting turned on for you phone but off on your
 desktop. The rest of the settings are the same. The renderer could detect which
 device you're using and send different options based on how you've configured
-it.
+it. This feature would have implications for seamless handoff but it's hopefully
+not too bad.
