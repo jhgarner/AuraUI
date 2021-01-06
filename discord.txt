@@ -1,102 +1,197 @@
+This document is WIP and a lot of the UI is still missing. I think it's far
+enough along that I'll add it to the repo.
+
+This is a pretty complicated one. You should check out the htop.txt example
+first before diving in here.
+
+I really leaned into the mentality of just trusting the renderer on this one.
+If you look at the schema, it makes no reference to headers or sidebars.
+Instead, it provides a lot of information and various heuristics do the rest. Of
+course it's much easier to claim heuristics can solve all of these problems than
+it is to actually create the heuristics.
+
+One argument for why the renderer should have so much control is that there are
+a ton of rendering targets. A header bar makes sense when viewing it in your
+browser but doesn't make sense when viewed in a cli.
 
 
-DiscordChannel {
-}
+Schema:
 
-DiscordServer {
-  ShortName {String}: {
-    FullName {String}:
-    {List -type: {DiscordChannel}}
-  }
-} display as
-  # WebRender can only be used in display as blocks
-  {WebRender ...: ...}
+Server = ServerC (name String) (icon String) (channels [Channel])
 
-Discord {
-  Me {AnimIcon}: {
-    ...
-  }
-  [DiscordServer]
-  Add {AnimIcon}: {
-    ...
-  }
-}
+Server display as
+  {Icon --path "$icon", fstring --string "$name", channels}
+
+# Max width pulled from discord website
+Channels = ChannelsC (icon String) (name String --maxWidth 32) (messages [UserMessage])
+
+Channels display as
+  {fstring --string "$name", Icon --path icon, messages}
+
+# Pros of this kind of design: It separates the data from the random icons and
+# buttons that perform actions.
+# Cons of this design: It splits the UI into multiple places which feels kind of
+# weird but maybe it's not.
+# I'm concerned that there might be a weird amount of overlap between interact
+# and display block.
+Channels interact as
+  !{Icon -path "notif.png"} -help "Muting a channel..."
+
+UserMessage = UserMessageC
+              (icon String)
+              # The max width is pulled from Discord docs
+              (name String --maxWidth 32)
+              (when Time)
+              (message Message)
+
+UserMessage interact as
+  {!{Icon -path "reaction.png" -alt "reaction"} -help "Add an emoji reaction",
+   !{Icon -path "reply.png" -alt "reply"} -help "Reply to a message...",
+   ...}
+
+# Search bars shouldn't be mentioned in the schema because they aren't data.
+# That means # searchable data needs to be marked somehow so that the renderer
+# knows to contact # the backend. The backend would then send back results and
+# maybe specify parts # of the results that matched the searched thing. I have no
+# idea what searching # over other types would look like...
+UserMessage searchable as
+  String
+
+UserMessage display as
+  {Icon --path icon -ratio "1:1", fstring --string "$name", Time --relative --time when,
+  # AppendLastPartial means the user can interact by appending to the end of the
+  # list. Partial means that you can only edit the message field. When the user
+  # expresses desire to append, the message field gets sent to the backend who
+  # responds with the new element
+  !!message -appendLastPartial [message]}
+
+Message = TextM (text String)
+        | ImageM (image Image)
+        # What should be the type here?
+        | AttachmentM (attach Attachment)
+        # Replies seem kind of complicated and I'm not sure how to represent
+        # them... Maybe I need a pointer type?
+        # | ReplyM (text String) (to MessageIndex)
+
+# Message supports modifying the contents of the message and the type of the
+# message.
+Message Interact as
+  # Sketchy pattern matching syntax
+  !TextM = !text -withEmojis
+  !ImageM = !image -from filePicker
+  !AttachmentM = !attach -from filePicker
+  # !ReplyM = !text -withEmojis
+
+Discord = DiscordC (discord [Server])
+
+DiscordC [
+  ServerC
+    (name "Mines Movie Squad")
+    (icon "mms.png")
+    (channels [
+      ChannelC
+        (icon "hashtag.png")
+        (name "General")
+        (messages [
+          UserMessageC
+            (icon "jkrmnj.png")
+            (name "jkrmnj")
+            (when utc-time-stamp-here)
+            (messages [
+              TextM (text "Take a look at this!"),
+              ImageM (image "userUpload-01234.png")
+            ]),
+          UserMessageC
+            (icon "Zatton.png")
+            (name "Zatton")
+            (when utc-time-stamp-here)
+            (messages [
+              TextM (text "Wow, take a look at this docx file!"),
+              Attachment (attach "userUpload-01234.docx")
+            ])
+        ])
+    ]),
+  ...
+]
+
+How?
+
+UserMessage:
+Since there are a static number of elements in UserMessage, we default to a
+horizontal orientation for them. Since messages can be extremely long and all of
+the elements need to be as tall as the tallest element, we'll put messages below
+the other elements. Things are almost good, but it's no longer clear that the
+messages are related to the other elements. To fix that, we'll make the icon 2
+lines tall so that it's next to the username and the first line of the message.
+
+We can make assume that only 1 line is for the time and the username in most
+cases because the username is a max of 32 characters and the time is a locale
+defined maximum width.
+
+The UI above makes it sound like every single message has the name/avatar
+duplicated all over the place. Although that's a valid way to render it, there
+are other options. A renderer might detect multiple userMessages in a row with
+similar information. Since the list can't be filtered or reordered, the renderer
+is allowed to remove duplicate information to make the interface less cluttered.
+If the avatar or username could be interacted with, then they wouldn't be
+removable from the list.
+
+???
+You might be thinking "but wait, I can click on the avatar and username!".
+Although you're right, that's not an interactive element. Instead, that is a
+pointer to data about the user.
+???
+
+In the htop example, a list was interpreted to be a table. The discord ui isn't
+interpreted as a table because it is not filterable or sortable. Since the
+renderer won't be required to arbitrarily reorder elements in the list, it has a
+lot of freedom about how to place them.
+
+Side Bars:
+Discord has two nested panels on the left. The first one contains a list of
+servers and the second contains a list of rooms.
+
+The renderer will detect that each channel contains a distracting element and
+that the channels want as much space as possible. It can then decide to only
+show one channel at a time. Now it needs a way to help the user switch between
+channels. The renderer will try to find a subset of fields in the channel that
+can help the user identify which one they want to click on. Since the leftmost
+fields are the most identifiable, it will try to pick those for the subset
+first. The name has a max size of 32 characters so it picks that as part of the
+subset. It also grabs the icon to pull in because it's small and makes it the
+second most identifiable.
+
+The server list takes a similar chain of reasoning. In this case, the icons are
+the most identifiable so they appear on their own. Since the name is strongly
+identifiable too, it appears on hover.
 
 
+Header Bar:
+The header bar is created by combining identifiable information with interactive
+elements.
 
+Add/Create server UI:
+TODO
+This offers some unique challenges. On the one hand, I'd like to use a similar
+technique to the new messages ui. The problem though is that servers can be
+created or searched and the ui around that is pretty flashy and complicated.
 
+Settings (in various places):
+TODO
+I think this is a chance to really improve things. Discord has a lot of settings
+buttons all over the place. Although it feels ad-hoc, I think it will integrate
+well with the separate settings idea mentioned in the htop file.
 
+Home:
+TODO
+The existing ui is kind of weird.
 
-{
-  {ExpandingIcon -icon: "discord.com/icon/big"} ->
-  {
-    ...
-  }
-  [
-    "MGAM" -> 
-      {
-        {name: "general", !invite: "s3.a.b", ...} ->
-          {
-            {[sign: "s3.com/hashtag.png", name: "general"], [!bell: "s3.com/bell.png, ...]}
-            [
-              ???,
-              {avatar: "s3.aws.com/discord/jkrmnj", userName: "jkrmnj", Date: "Today"} ->
-                ["Test", "Message 2", "M3"],
-              {avatar: "s3.aws.com/discord/Zatton", userName: "Zatton", Date: "Yesterday"} ->
-                ["Another Test\n\ntest"]
-            ],
-            {!attach: "s3.com", *!message: "", ...}
-          }
-        "idk" -> ???
-      }
-    "MMS" -> ???
-  ]
-  [
-    "New" ->
-    {
-      ...
-    }
-    "Search" ->
-    {
-      ...
-    }
-  ]
-}
+The voice settings at the bottom of every screen:
+TODO
+The mute and deafen buttons offer some interesting challenges. The user info
+down there doesn't seem like it belongs. The user settings might belong
+somewhere else.
 
-
-
-{
-  "Dashboard" ->
-  {
-    ...
-  }
-  [
-    "MGAM" -> 
-      {
-        {name: "general", !invite: "s3.a.b", ...} ->
-          {
-            {[sign: "s3.com/hashtag.png", name: "general"], [!bell: "s3.com/bell.png, ...]}
-            [
-              ???,
-              {avatar: "s3.aws.com/discord/jkrmnj", userName: "jkrmnj", Date: "Today"} ->
-                ["Test", "Message 2", "M3"],
-              {avatar: "s3.aws.com/discord/Zatton", userName: "Zatton", Date: "Yesterday"} ->
-                ["Another Test\n\ntest"]
-            ],
-            {!attach: "s3.com", *!message: "", ...}
-          }
-        "idk" -> ???
-      }
-    "MMS" -> ???
-  ]
-  [
-    "New" ->
-    {
-      ...
-    }
-    "Search" ->
-    {
-      ...
-    }
-  ]
-}
+User Profiles:
+TODO
+These might require adding new features to the schema.

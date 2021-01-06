@@ -48,7 +48,7 @@ Process = ProcessC
 # That means the only thing you can do to it is click on it.
 Process Interact as
     # the action flag provides a name for the interaction.
-    () -action "End Process"
+    !{} -action "End Process"
 
 # Help should be embedded into the UI to improve accessibility, not given as a
 # separate page. For that reason, help is missing.
