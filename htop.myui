@@ -1,0 +1,261 @@
+###
+This document implements an imaginary UI for htop that could be renderered by a
+renderer. If you use Vim, you can install the syntax folder to get nice
+highlighting in this file. Without the highlighting, things can be really hard
+to read.
+###
+
+###
+The schema follows this comment. An app should be able to register its schema
+at install time. The schema should not change in between runs of the program.
+###
+
+# We define a type called Widget. Widget has a handlful of constructors
+# separated by the | character.
+Widget = ProcessorUsage (n Int) (pct Double)
+       | MemoryUsage (used Double) (total Double)
+       | Tasks (numTasks Int) (thr Int) (numRunning Int)
+       | ...
+
+# Here we define how a Widget gets displayed. Most types can be displayed by
+# combining more primitive types together.
+Widget display as
+    # Strange pattern matching syntax follows...
+    ProcessorUsage display as
+        # {...} is a tuple. If a user were to only see part of a tuple, the
+        # most identifiable information should be first. The -thing syntax lets
+        # you pass flags/parameters.
+        {Fstring -string "$n", ProgressBar -percent pct}
+
+    MemoryUsage display as
+        {Fstring -string "Mem", ProgressBar -numerator used -denominator total}
+
+    Tasks display as
+        Fstring -string "Tasks: $numTasks, $thr thr; $numRunning running"
+
+
+# You can use the same name for the type and the contsructor. I think it's
+# unambiguous which you mean in all cases but that might not be the case.
+Process = Process
+    # Constructor arguments can go on their own lines.
+    (pid Int)
+    (user String)
+    (pri Int)
+    (ni Int)
+    (virt Int -unit: "Byte")
+    # ... Means I didn't want to write it out.
+    ...
+    (time Time -precision: "Seconds")
+    ...
+
+# This defines how an object can be interacted with by the user.
+Process interact as
+    ###
+    A ! means it's interactive. !{...} makes a clickable element. The hints
+    flag can be used or ignored by the renderer. It explains what semantically
+    might happen when the tuple is "clicked". Destructive means it can't be
+    undone. Remove means the data will likely be removed after clicking.
+
+    Although I use the verb click, the user might be interacting in any number
+    of ways. What matters is that interacting happens instantly and that
+    there's no data other than that it happening.
+    ###
+    !{Icon -path "stop.png" -help "End Process"} -hints {"destructive", "remove"}
+    # !Variable means the underlying data can be edited. The renderer should
+    # create the correct UI to make this happen.
+    !pri
+    !ni
+
+
+Dashboard = Dashboard (widgets [Widget])
+
+Dashboard interact as
+    # The can* flags control what a it means for a list to be editable. The
+    # renderer will automatically generate a UI for customizing the dashboard
+    # thanks to those flags.
+    !widgets -canAdd -canRemove -canReorder
+
+Dashboard display as
+    ###
+    The mostlyConst flag tells the renderer that the list of widgets is
+    dynamic, but that changes are allowed to reflow the entire UI. This lets the
+    renderer delay the UI flow until it has received the contents of the
+    Dashboard. Without the mostlyConst flag, the renderer would have to assume
+    the worst possible case and flow the entire UI around that. Normally, a
+    change in data shouldn't change the flow of the UI. The only thing that can
+    change the flow is a change in the window size.
+    MostlyConst is not recursive (meaning it only applies to the list, not the
+    data inside the elements of the list)
+    ###
+    widgets -mostConst
+
+
+Htop = Htop (dashboard Dashboard) (processList [Process])
+
+Htop interact as
+    # The allElemEditable flag says that each element of the list should be
+    # interactive too.
+
+    # These flags also implement client side filter, search, and sorting. Most
+    # apps probably want server side versions of those things (and to avoid
+    # sending all data to the renderer at once). That kind of interaction
+    # between the renderer and the app complicates things a bit.
+    !processList -filter -search -sort -allElemInteractive
+
+Htop display as
+    {dashboard, processList}
+
+
+###
+The data below fits the schema and would be sent (and updated) at runtime.
+
+Renderers are lazy. Instead of asking for all of the data at startup, they'll
+ask the apps to send over parts of the data. Apps can leave holes that the
+renderer might want to fill in later. The example below assumes that all of the
+holes have been filled in. The ... syntax is my own laziness.
+
+TODO: Should I use syntax like (dashboad ...) or -dashboard ...? Basically, are
+data type constructors as defined above different from flags? Should I only
+have one of the two?
+###
+Htop
+    (dashboard Dashboard
+        [ ProcessorUsage (n 1) (pct 2.6)
+        , ProcessorUsage (n 2) (pct 3.5)
+        , ProcessorUsage (n 3) (pct 1.0)
+        , ProcessorUsage (n 4) (pct 100.0)
+        , MemoryUsage (used 3.07) (total 15.5)
+        , Tasks (numTasks 111) (thr 400) (numRunning 1)
+        ]
+    )
+
+    (processList ProcessList
+        [ Process
+            (pid 50)
+            (user "Jack")
+            (pri "2")
+            (ni "0")
+            (virt "100000")
+            ...
+            (time "1980234") #<- Unix time stamp
+            ...
+        , Process
+            (pid 51)
+            (user "Jack")
+            (pri "2")
+            (ni "0")
+            (virt "100000")
+            ...
+            (time "19804") #<- Unix time stamp
+            ...
+        ...
+        ]
+    )
+
+###
+How could we render this?
+
+Dashboard:
+Since the dashboard is mostly constant, we can analyze the data to decide how
+much space it should take up. Normally, we would have to assume that it might be
+empty one second and filled with a million elements the next. The mostlyConst
+flag means we can see that it only has a handful of elements and assign it a
+specific width and height.
+
+Process list:
+We might have an infinite number of processes with infinitely long columns. This
+list will ask for 100% width and 100% height. Since strings can be arbitrarily
+long, we'll orient the list vertically to avoid weird horizontal scrolling.
+
+Should the dashboard be to the left or above the process list? Since we know
+more about the dashboard, we'll focus on that one. Since the text largely fits
+on half a screen and progress bars don't get a lot of benefit from being
+exceptionally wide, we can likely orient the dashboard list as a kind of grid.
+After doing that, We can see that the width of the dashboard is larger than the
+height. In addition, it can use 100% of the width but can't use 100% of the
+height. That means we can give the process list (which asks for 100% in both
+dimensions) more of its requested space and we can avoid excessive whitespace by
+arranging the two elements vertically.
+
+Although the above paragraph is pretty handwavy, it hopefully gives an idea
+about why a renderer might pick a certain orientation for elements. Imagine if
+the dashboard were extremely large and none of the elements were very wide. If
+the terminal screen were large enough, it might make sense to put the dashboard
+horizontal to the process list and have it scroll vertically parallel to the
+process list.
+
+This opens a question about how much layout shenanigans we can pull before users
+become disoriented. In the tablet/mobile world, it seems acceptable to provide
+fairly different UI's when in portrait vs landscape. In landscape you get more
+views lined up side by side. If users are OK with that, then they'll probably
+understand the layout shifting to handle window size changes. Any layout change
+must keep the content they were looking at visible though.
+
+
+
+What's different?
+
+Instead of faithfully recreating the htop interface, I will instead make a case
+that the existing interface is suboptimal and that the version described above
+improves upon it. The process list stays mostly the same, but the dashboard has
+gotten a big change.
+
+First, the original dashboard doesn't scale as your terminal width changes.
+That means text will get cut off and become unreadable because it's trying to
+fit two columns into a space where only one is available. It also doesn't scale
+up.  Instead, it makes the progress bars really large which doesn't provide
+that much more information. The text based items don't get any extra
+information either and just waste a lot of space. You can also imagine a case
+where you had a translation that made some of the textual representations
+extremely large. You might not want two columns because it would cut off text
+even with a large screen.
+
+In the original htop you could control which columns the dashboard widgets were
+on. Based on the above, such a feature might be an antipattern because it breaks
+the app's ability to resize itself. If the user really wants to control which
+widgets appeared in which columns, they might need a more powerful layout
+editing tool that only applied their customization when the screen was the right
+size. Such a tool should be implemented by the renderer, not the app.
+
+Beyond the dashboard, there are a couple of pages in the app that are missing
+from the schema/type above. Specifically, the help and setup pages would be
+moved into an (unwritten) alternative schema. The current help page reads like
+a colorful man page. Although useful, a flat man page has its problems. For
+one, it disconnects the help text from the elements it
+provides help for. This hurts discoverability and accessibility.  Imagine a user
+that's interacting with the computer in a non-standard way. If a piece of help
+text were associated with the button or element it provided help for, then a
+screen reader could provide context on how the element would be used. Imagine
+another user that's never used the app before. They could press "?", just like
+they do on every new TUI app, to see the UI suddenly annotated with useful
+information.
+
+Moving help text to a more generic format has other benefits. You could use it
+to generate help pages in a variety of formats (man page, html doc, pdf, etc.),
+you could provide animations, automatically generated screenshots, or you
+could use it to create a form of macros.
+
+To explain the macro comment a bit more, imagine if you search through the help
+pages for how to do X. In most systems, you now have to switch between multiple
+windows to follow the steps. In this UI, you could click a button on the help page
+and the app would actually show you how to navigate to and use the feature you
+want. This could either be fully automated (with the computer "clicking" for
+you) or it could highlight the parts of the UI it wants you to click on next.
+
+The setup page would be a lot like the help page. Basically, it's a separate piece of
+data that the renderer will integrate with your UI somehow. Apps can use the
+renderer protocol to extract the settings at startup and adjust behavior
+accordingly. One cool benefit is that programs no longer have to deal with
+argument parsing or reading config file formats. From a user's point of view,
+all configuration could be saved in plain text in an easy to find location by the
+renderer. You could toss some kind of syncing on that directory to get your
+preferences shared across devices.
+
+This also lets you control how preferences are loaded. If the program didn't use
+this UI system, it might not support sharing one config file across devices. For
+example, you might have one setting turned on for you phone but off on your
+desktop. The rest of the settings are the same. The renderer could detect which
+device you're using and send different options based on how you've configured
+it. This feature would have implications for seamless handoff but it's hopefully
+not too bad.
+###
