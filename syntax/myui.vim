@@ -15,11 +15,11 @@ syntax match variable /[a-z]\w*/
 
 syntax match displayBlock  /^\s*[A-Z]\w* display as/ contains=type
 syntax match interactBlock  /^\s*\w\+ interact as$/ contains=type
-syntax match equalBlock  /^\w\+ = .\+$/ contains=type,variable
-syntax match orBlock  /^\s*| .\+$/ contains=type,variable
+syntax match equalBlock  /^\w\+ = .\+$/ contains=type,variable,flag,string,comment
+syntax match orBlock  /^\s*| .\+$/ contains=type,variable,flag,string,comment
 syntax match escaped /\$[a-z]\w*/ contained
 syntax match comment /#.*/
-syntax match flag /-\w\+/
+syntax match flag /-[a-z]\w*/
 syntax region string start=/"/ end=/"/ contains=escaped
 syntax region bigComment start=/###/ end=/###/
 

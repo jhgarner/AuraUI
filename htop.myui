@@ -12,8 +12,9 @@ at install time. The schema should not change in between runs of the program.
 
 # We define a type called Widget. Widget has a handlful of constructors
 # separated by the | character.
-Widget = ProcessorUsage (n Int) (pct Double)
-       | MemoryUsage (used Double) (total Double)
+Widget = ProcessorUsage (n Int -max (AskAtStart -as "NumCPU" -min 1) (pct Double -unit "percent")
+       | MemoryUsage (used Int -unit "Byte") (total Int -unit "Byte")
+       # TBH I have no idea what the tasks widget does...
        | Tasks (numTasks Int) (thr Int) (numRunning Int)
        | ...
 
@@ -32,16 +33,28 @@ Widget display as
 
     Tasks display as
         Fstring -string "Tasks: $numTasks, $thr thr; $numRunning running"
+    ...
+
+Widget interact as
+    ProcessorUsage interact as
+        # ! is magic syntax for editable. Something on each line must be marked
+        # with it.
+        # !Variable means the underlying data can be edited. The renderer should
+        # create the correct UI to make this happen.
+        !n
+    # !Constructor is special syntax meaning you can edit a Widget by changing
+    # the constructor.
+    !Constructor -all
 
 
 # You can use the same name for the type and the contsructor. I think it's
 # unambiguous which you mean in all cases but that might not be the case.
 Process = Process
     # Constructor arguments can go on their own lines.
-    (pid Int)
-    (user String)
-    (pri Int)
-    (ni Int)
+    (pid Int -max 32768 -min 0)
+    (user String -maxLength 32)
+    (pri Int -max 100 -min 0)
+    (ni Int -max 19 -min -20)
     (virt Int -unit: "Byte")
     # ... Means I didn't want to write it out.
     ...
@@ -51,23 +64,26 @@ Process = Process
 # This defines how an object can be interacted with by the user.
 Process interact as
     ###
-    A ! means it's interactive. !{...} makes a clickable element. The hints
-    flag can be used or ignored by the renderer. It explains what semantically
-    might happen when the tuple is "clicked". Destructive means it can't be
-    undone. Remove means the data will likely be removed after clicking.
+    !{...} makes a clickable element. The hints flag can be used or ignored by
+    the renderer. It explains what semantically might happen when the tuple is
+    "clicked". Destructive means it can't be undone. Remove means the data will
+    likely be removed after clicking.
 
     Although I use the verb click, the user might be interacting in any number
     of ways. What matters is that interacting happens instantly and that
     there's no data other than that it happening.
     ###
     !{Icon -path "stop.png" -help "End Process"} -hints {"destructive", "remove"}
-    # !Variable means the underlying data can be edited. The renderer should
-    # create the correct UI to make this happen.
     !pri
     !ni
 
+Process display as
+    # Clipping the username at 8 is standard according to the internet.
+    {pid, user -clipAt 8, pri, ni, virt, ..., time}
 
-Dashboard = Dashboard (widgets [Widget])
+# -uniqueBy can also take a list of fields to consider. "editable" is short for
+# anything that can be edited by the user.
+Dashboard = Dashboard (widgets [Widget] -uniqueBy "editable")
 
 Dashboard interact as
     # The can* flags control what a it means for a list to be editable. The
@@ -87,7 +103,7 @@ Dashboard display as
     MostlyConst is not recursive (meaning it only applies to the list, not the
     data inside the elements of the list)
     ###
-    widgets -mostConst
+    widgets -mostlyConst
 
 
 Htop = Htop (dashboard Dashboard) (processList [Process])
@@ -100,7 +116,7 @@ Htop interact as
     # apps probably want server side versions of those things (and to avoid
     # sending all data to the renderer at once). That kind of interaction
     # between the renderer and the app complicates things a bit.
-    !processList -filter -search -sort -allElemInteractive
+    !processList -filter -search -sort
 
 Htop display as
     {dashboard, processList}
