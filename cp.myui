@@ -1,0 +1,69 @@
+###
+This UI language needs to work for CLI's. Ideally, the final result will be no
+slower to use than the original
+###
+
+Copy = Copy (from File) (to File -mustExist False) (followLinks Bool) (interactive Bool)
+Copy interact as
+  # CommittedBy means to keep the changes local until another parameter is
+  # interacted with.
+  !from -committedBy
+  !to -committedBy copy
+  !followLinks -committedBy copy
+  !!copy {Fstring -string "Copy"}
+
+###
+The following is a verbose representation of the Copy program.
+Copy --from=myfile --to=otherfile --copy
+
+If we don't name the parameters, they're assumed to be in the order they were
+made interactive. If you're ever curious about the order, check the help page
+for the command will tell you.
+Copy myfile otherfile --copy
+
+If we interact with something and it only gets committed when something else
+changes, the CLI will automatically interact with the committer assuming it
+doesn't take parameters.
+Copy myfile otherfile
+
+Commands must call a constructor and all constructors are upper case words, so
+maybe we can save the user some typing by making the case implicit?
+copy myfile otherfile
+
+Finally, we could alias Copy to Cp to get
+cp myfile otherfile
+###
+
+List = List (directory File -mustBePath True) (files [File] -inside directory)
+List interact as
+  !directory
+
+List display as
+  {directory, files}
+
+###
+Since List has a display as field, it will output text to the terminal. Since
+Files are built in objects, the renderer will handle a lot of the flags
+normally used by ls.
+
+Ideally, list would look like a file manager in GUI mode. It's reasonable for a
+renderer to detect that directory is editable with a type of File and files
+contains a list of Files, so let the user easily change the directory using
+files.
+
+In most file managers, you can right click to copy, move, etc. Implementing
+that kind of logic in List seems a little wrong. Maybe there exists a type
+registering system where different programs can announce that they have
+features for different types. Right clicking on a file uses that registry to
+provide actions.
+
+This isn't a great solution though. The Unix command "mv" handles moving files
+to different locations and renaming files. Renaming has a super simple
+interface in most GUIs while moving looks like a cut and paste.
+
+This also opens questions about the clipboard. If List can't interact with
+files, what does it mean to copy, paste, or cut? Maybe we define abstract
+interfaces which can be implemented by programs. One would be CopyPaste and
+another would be CutPaste. If multiple programs try to implement one, the user
+might be prompted about which to use and which they want to be the default.
+###

@@ -19,46 +19,61 @@ browser but doesn't make sense when viewed in a cli.
 Schema:
 ###
 
-Server = ServerC (*id Int) (name String) (icon String) (channels [Channel])
+Server = ServerC (*id Int) (name String -max 32 -min 2) (icon IconOrName) (channels [Channel]) (online [User]) (offline [User])
 
 Server display as
-  {Icon --path "$icon", fstring --string "$name", channels}
+  {icon, fstring -string "$name", channels}
+
+Server interact as
+  !channels -elements
+
+IconOrName = Icon (icon String)
+           # I have no idea what the max on this one is. I'm going to guess 4?
+           | Name (name String -maxLength 4)
+
+IconOrName display as
+  Icon display as
+    Icon -path "$icon" -ratio "1:1"
+  Name display as
+    fstring -string "$name"
 
 # Max width pulled from discord website
-Channel = TextChannel (name String --maxWidth 32) (messages [UserMessage])
-        | VoiceChannel (name String --maxWidth 32) (voices [Voices])
+Channel = TextChannel (name String -maxWidth 32) (messages [UserMessage])
+        | VoiceChannel (name String -maxWidth 32) (voices [Voices])
 
-Channels display as
-  TextChannel = {fstring --string "$name", Icon --path icon, messages}
-  VoiceChannel = {fstring --string "$name", Icon --path icon, voices}
+Channel display as
+  TextChannel display as
+    {fstring -string "$name", Icon -path "hashtag.png", messages}
+  VoiceChannel display as
+    {fstring -string "$name", Icon -path "speaker.png", voices}
 
-# Pros of this kind of design: It separates the data from the random icons and
-# buttons that perform actions.
-# Cons of this design: It splits the UI into multiple places which feels kind of
-# weird but maybe it's not.
-# I'm concerned that there might be a weird amount of overlap between interact
-# and display block.
-Channels interact as
+Channel interact as
+  # TODO is this worth listing here or is it something else??
   !{Icon -path "notif.png"} -help "Muting a channel..."
+  !!messages -append -partial [message] -elements
 
-UserMessage = UserMessageC
+Reaction = Reacted (num Int)
+         | NotReacted (num Int)
+
+Reaction display as
+  Reacted display as
+    {fstring -string "$num"}
+  NotReacted display as
+    {fstring -string "$num"}
+
+Reacted interact as
+  !Constructor -all
+
+UserMessage = UserMessage
               (icon String)
               # The max width is pulled from Discord docs
-              (name String --maxWidth 32)
+              (name String -maxWidth 32)
               (when Time)
               # TODO emoji should probably be defined elsewhere instead of
               # looking like a builtin.
-              (myReactions CountSet -type emoji)
-              (otherReactions Set -type emoji)
+              (reactions Map -key emoji -value Reaction)
               (message Message)
 
-UserMessage interact as
-  # AppendLastPartial means the user can interact by appending to the end of the
-  # list. Partial means that you can only edit the message field. When the user
-  # expresses desire to append, the message field gets sent to the backend who
-  # responds with the new element.
-  !!message -appendLastPartial [message]
-  !myReactions
 
 # Search bars shouldn't be mentioned in the schema because they aren't data.
 # That means searchable data needs to be marked somehow so that the renderer
@@ -69,8 +84,12 @@ UserMessage searchable as
   String
 
 UserMessage display as
-  {Icon --path icon -ratio "1:1", fstring --string "$name", Time --relative --time when,
-  message, CountSet -union {myReactions, otherReactions}}
+  {Icon -path icon -ratio "1:1", fstring -string "$name", Time -relative -time when,
+  message, reactions}
+
+UserMessage interact as
+  !myReactions
+  !message
 
 User = UserC
         (*id Int)
@@ -81,50 +100,62 @@ User = UserC
         (users [User])
 
 User interact as
-  !{fstring --string "block"}
+  !{fstring -string "block"}
   !note
 
 User display as
-  {fstring --string "$name", Image --path "$profile", fstring --string "$note",
+  {fstring -string "$name", Image -path "$profile", fstring -string "$note",
    servers, users}
 
 
-Message = TextM (*id Int) (text String)
+AMessage = TextM (*id Int) (text String)
         | ImageM (*id Int) (image Image)
-        # What should be the type here?
         | AttachmentM (*id Int) (attach Attachment)
-        # *Message means a point (using the id field)
-        | ReplyM (*id Int) (text String) (to *Message)
+        # *Message points to another message inside the given path.
+        | ReplyM (*id Int) (text String) (to *Message -inPath "../")
 
-# MyMessage is a valid Message, but Message isn't a valid MyMessage
-MyMessage = Message
-
-# Message supports modifying the contents of the message and the type of the
-# message.
-MyMessage Interact as
-  # Sketchy pattern matching syntax
-  !TextM = !text -withEmojis
-  !ImageM = !image -from filePicker
-  !AttachmentM = !attach -from filePicker
-  # !to means that you can pick a message to reply to. Duplicating the list of
-  # messages in the edit box is pointless so it will add an action to reply to
-  # messages as you scroll past them. TODO How do we ensure you only reply to
-  # messages in the current channel? Scala has path dependent types which might
-  # be helpful here.
-  !ReplyM = {!text -withEmojis, !to}
-  # Lines without "=" apply to all messages
+AMessage Interact as
   !{Icon -path "trash.png" -help "delete message"} -hint {destructive, remove}
+  !Constructor -all
+  TextM interect as
+    !text -withEmojis
+  ImageM interact as
+    !image -from filePicker
+  AttachmentM interact as
+    !attach -from filePicker
+  ReplyM interact as
+    !id
+    !text -withEmojis
+    !to
+
+Message = MyMessage (msg AMessage)
+        | NotMyMessage (msg AMessage)
+
+Message interact as
+  MyMessage interact as
+    !msg
 
 Voice = VoiceC (inChat [User]) (chatId Int)
 Voice display as
   # Stream is a widget which handles streaming audio and/or video. A renderer
   # with a working stream widget should let the user continue a stream in the
-  # background. I'm kind of worried thought because streams have a nontrivial
+  # background. I'm kind of worried though because streams have a nontrivial
   # amount of UI in them that isn't directly controlled by the renderer.
-  {inChat, Stream --id chatId}
+  {inChat, Stream -id chatId}
 
-Discord = DiscordC (discord [Server])
+Discord = DiscordC (servers [Server]) (me Me)
+Discord display as
+  {servers, me}
 
+Me = Me (me User)
+Me display as
+  me
+Me interact as
+  Icon -path "mute.png"
+  Icon -path "deafen.png"
+
+
+# Everything below here is the data sent to the renderer.
 DiscordC [
   ServerC
     (name "Mines Movie Squad")
@@ -137,7 +168,7 @@ DiscordC [
           UserMessageC
             (icon "jkrmnj.png")
             (name "jkrmnj")
-            (when utc-time-stamp-here)
+            (when utcTimeStampHere)
             (messages [
               TextM (text "Take a look at this!"),
               ImageM (image "userUpload-01234.png")
@@ -145,7 +176,7 @@ DiscordC [
           UserMessageC
             (icon "Zatton.png")
             (name "Zatton")
-            (when utc-time-stamp-here)
+            (when utcTimeStampHere)
             (messages [
               TextM (text "Wow, take a look at this docx file!"),
               Attachment (attach "userUpload-01234.docx")
@@ -155,6 +186,7 @@ DiscordC [
   ...
 ]
 
+###
 How?
 
 UserMessage:
@@ -217,22 +249,11 @@ This offers some unique challenges. On the one hand, I'd like to use a similar
 technique to the new messages ui. The problem though is that servers can be
 created or searched and the ui around that is pretty flashy and complicated.
 
-Settings (in various places):
-TODO
-I think this is a chance to really improve things. Discord has a lot of settings
-buttons all over the place. Although it feels ad-hoc, I think it will integrate
-well with the separate settings idea mentioned in the htop file.
-
 Home:
 TODO
 The existing ui is kind of weird.
 
-The voice settings at the bottom of every screen:
-TODO
-The mute and deafen buttons offer some interesting challenges. The user info
-down there doesn't seem like it belongs. The user settings might belong
-somewhere else.
-
 User Profiles:
 TODO
 These might require adding new features to the schema.
+###

@@ -7,12 +7,16 @@ to read.
 
 ###
 The schema follows this comment. An app should be able to register its schema
-at install time. The schema should not change in between runs of the program.
+at install time. The schema cannot change while running the program.
 ###
+
+# First we'll create the dashboard at the top of htop.
 
 # We define a type called Widget. Widget has a handlful of constructors
 # separated by the | character.
-Widget = ProcessorUsage (n Int -max (AskAtStart -as "NumCPU" -min 1) (pct Double -unit "percent")
+# AskAtStart means you have some value which you can't know ahead of time but
+# won't change while the program is running.
+Widget = ProcessorUsage (n Int -max (AskAtStart -as "NumCPU") -min 1) (pct Double -unit "percent")
        | MemoryUsage (used Int -unit "Byte") (total Int -unit "Byte")
        # TBH I have no idea what the tasks widget does...
        | Tasks (numTasks Int) (thr Int) (numRunning Int)
@@ -24,8 +28,7 @@ Widget display as
     # Strange pattern matching syntax follows...
     ProcessorUsage display as
         # {...} is a tuple. If a user were to only see part of a tuple, the
-        # most identifiable information should be first. The -thing syntax lets
-        # you pass flags/parameters.
+        # most identifiable information should be first.
         {Fstring -string "$n", ProgressBar -percent pct}
 
     MemoryUsage display as
@@ -37,8 +40,7 @@ Widget display as
 
 Widget interact as
     ProcessorUsage interact as
-        # ! is magic syntax for editable. Something on each line must be marked
-        # with it.
+        # ! is syntax for editable.
         # !Variable means the underlying data can be edited. The renderer should
         # create the correct UI to make this happen.
         !n
@@ -46,6 +48,8 @@ Widget interact as
     # the constructor.
     !Constructor -all
 
+
+# Now we're to the process list part of the UI.
 
 # You can use the same name for the type and the contsructor. I think it's
 # unambiguous which you mean in all cases but that might not be the case.
@@ -56,7 +60,6 @@ Process = Process
     (pri Int -max 100 -min 0)
     (ni Int -max 19 -min -20)
     (virt Int -unit: "Byte")
-    # ... Means I didn't want to write it out.
     ...
     (time Time -precision: "Seconds")
     ...
@@ -112,10 +115,8 @@ Htop interact as
     # The allElemEditable flag says that each element of the list should be
     # interactive too.
 
-    # These flags also implement client side filter, search, and sorting. Most
-    # apps probably want server side versions of those things (and to avoid
-    # sending all data to the renderer at once). That kind of interaction
-    # between the renderer and the app complicates things a bit.
+    # These flags are either client side or server side. It probably depends on
+    # whether the data all exists on the client or not.
     !processList -filter -search -sort
 
 Htop display as
