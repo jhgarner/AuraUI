@@ -1,8 +1,8 @@
 ###
-This document is WIP and a lot of the UI is still missing. I think it's far
+This document is WIP and some of the UI is still missing. I think it's far
 enough along that I'll add it to the repo.
 
-This is a pretty complicated one. You should check out the htop.txt example
+This is a pretty complicated example. You should check out the htop.txt page
 first before diving in here.
 
 I really leaned into the mentality of just trusting the renderer on this one.
@@ -10,11 +10,6 @@ If you look at the schema, it makes no reference to headers or sidebars.
 Instead, it provides a lot of information and various heuristics do the rest. Of
 course it's much easier to claim heuristics can solve all of these problems than
 it is to actually create the heuristics.
-
-One argument for why the renderer should have so much control is that there are
-a ton of rendering targets. A header bar makes sense when viewing it in your
-browser but doesn't make sense when viewed in a cli.
-
 
 Schema:
 ###
@@ -33,8 +28,12 @@ IconOrName = Icon (icon String)
 
 IconOrName display as
   Icon display as
+    # TODO can we emulate the cool rounded squares using styling or should they
+    # be unique elements in the UI?
     Icon -path "$icon" -ratio "1:1"
   Name display as
+    # Should this be converted to an image on the app side or on the renderer
+    # side? How does the renderer do that?
     fstring -string "$name"
 
 # Max width pulled from discord website
@@ -48,7 +47,7 @@ Channel display as
     {fstring -string "$name", Icon -path "speaker.png", voices}
 
 Channel interact as
-  # TODO is this worth listing here or is it something else??
+  # TODO is this worth listing here or is it a "setting"?
   !{Icon -path "notif.png"} -help "Muting a channel..."
   !!messages -append -partial [message] -elements
 
@@ -61,7 +60,8 @@ Reaction display as
   NotReacted display as
     {fstring -string "$num"}
 
-Reacted interact as
+Reaction interact as
+  # Since there are only two constructors, any interaction must be a toggle.
   !Constructor -all
 
 UserMessage = UserMessage
@@ -70,8 +70,8 @@ UserMessage = UserMessage
               (name String -maxWidth 32)
               (when Time)
               # TODO emoji should probably be defined elsewhere instead of
-              # looking like a builtin.
-              (reactions Map -key emoji -value Reaction)
+              # looking like a builtin?
+              (reactions Map -key Emoji -value Reaction)
               (message Message)
 
 
@@ -84,12 +84,13 @@ UserMessage searchable as
   String
 
 UserMessage display as
+  # The order here is a little weird. Is the user's icon the most identifiable
+  # part of a message? I could see an argument either way.
   {Icon -path icon -ratio "1:1", fstring -string "$name", Time -relative -time when,
   message, reactions}
 
 UserMessage interact as
-  !myReactions
-  !message
+  !reactions
 
 User = UserC
         (*id Int)
@@ -124,7 +125,6 @@ AMessage Interact as
   AttachmentM interact as
     !attach -from filePicker
   ReplyM interact as
-    !id
     !text -withEmojis
     !to
 
@@ -132,6 +132,7 @@ Message = MyMessage (msg AMessage)
         | NotMyMessage (msg AMessage)
 
 Message interact as
+  # You can only interact with your own messages.
   MyMessage interact as
     !msg
 
@@ -141,12 +142,14 @@ Voice display as
   # with a working stream widget should let the user continue a stream in the
   # background. I'm kind of worried though because streams have a nontrivial
   # amount of UI in them that isn't directly controlled by the renderer.
+  # TODO consider expanding this.
   {inChat, Stream -id chatId}
 
 Discord = DiscordC (servers [Server]) (me Me)
 Discord display as
   {servers, me}
 
+# TODO Fix this up to be a little less strange.
 Me = Me (me User)
 Me display as
   me
@@ -158,29 +161,29 @@ Me interact as
 # Everything below here is the data sent to the renderer.
 DiscordC [
   ServerC
-    (name "Mines Movie Squad")
-    (icon "mms.png")
-    (channels [
+    -name "Mines Movie Squad"
+    -icon "mms.png"
+    -channels [
       ChannelC
-        (icon "hashtag.png")
-        (name "General")
-        (messages [
+        -icon "hashtag.png"
+        -name "General"
+        -messages [
           UserMessageC
-            (icon "jkrmnj.png")
-            (name "jkrmnj")
-            (when utcTimeStampHere)
-            (messages [
-              TextM (text "Take a look at this!"),
-              ImageM (image "userUpload-01234.png")
-            ]),
+            -icon "jkrmnj.png"
+            -name "jkrmnj"
+            -when utcTimeStampHere
+            -messages [
+              TextM -text "Take a look at this!",
+              ImageM -image "userUpload-01234.png"
+            ],
           UserMessageC
-            (icon "Zatton.png")
-            (name "Zatton")
-            (when utcTimeStampHere)
-            (messages [
-              TextM (text "Wow, take a look at this docx file!"),
-              Attachment (attach "userUpload-01234.docx")
-            ])
+            -icon "Zatton.png"
+            -name "Zatton"
+            -when utcTimeStampHere
+            -messages [
+              TextM -text "Wow, take a look at this docx file!",
+              Attachment -attach "userUpload-01234.docx"
+            ]
         ])
     ]),
   ...
@@ -191,14 +194,14 @@ How?
 
 UserMessage:
 Since there are a static number of elements in UserMessage, we default to a
-horizontal orientation for them. Since messages can be extremely long and all of
-the elements need to be as tall as the tallest element, we'll put messages below
-the other elements (aka make messages vertical). Things are almost good, but
-it's no longer clear that the messages are related to the other elements. To fix
-that, we'll make the icon 2 lines tall so that it's next to the username and the
-first line of the message.
+horizontal orientation for them. Since messages can be extremely long and all
+of the elements need to be as tall as the tallest element, we'll put messages
+below the other elements (like the user icon, timestamp, etc. Things are almost
+good, but it's no longer clear that the messages are related to the other
+elements. To fix that, we'll make the icon 2 lines tall so that it's next to
+the username and the first line of the message.
 
-We can assume that only 1 line is for the time and the username in most
+We can assume that only 1 line is needed for the time and the username in most
 cases because the username is a max of 32 characters and the time is a locale
 defined maximum width.
 
@@ -206,20 +209,15 @@ The UI above makes it sound like every single message has the name/avatar
 duplicated all over the place. Although that's a valid way to render it, there
 are other options. A renderer might detect multiple userMessages in a row with
 similar information. Since the list can't be filtered or reordered, the renderer
-is allowed to remove duplicate information to make the interface less cluttered.
-If the avatar or username could be interacted with, then they wouldn't be
-removable from the list.
-
-???
-You might be thinking "but wait, I can click on the avatar and username!".
-Although you're right, that's not an interactive element. Instead, that is a
-pointer to data about the user.
-???
+is allowed to remove duplicate information to make the interface less
+cluttered. If you had a really long series of messages, the renderer might even
+make the user icon sticky if the top of the message is above the top of the
+screen.
 
 In the htop example, a list was interpreted to be a table. The discord ui isn't
 interpreted as a table because it is not filterable or sortable. Since the
 renderer won't be required to arbitrarily reorder elements in the list, it has a
-lot of freedom about how to place them.
+lot of freedom about how to place elements.
 
 Side Bars:
 Discord has two nested panels on the left. The first one contains a list of
@@ -232,7 +230,9 @@ channels. The renderer will try to find a subset of fields in the channel that
 can help the user identify which one they want to click on. Since the leftmost
 fields are the most identifiable, it will try to pick those for the subset
 first. The name has a max size of 32 characters so it picks that as part of the
-subset. It also grabs the icon to pull in because it fits.
+subset. It also grabs the icon to pull in because it fits. TODO maybe it's
+better to group the icon and name together somehow so they always get displayed
+at the same time? Alternatively, the icon comes from the type of channel?
 
 The server list takes a similar chain of reasoning. In this case, the icons are
 the most identifiable so they appear on their own. Since the name is strongly
@@ -252,8 +252,4 @@ created or searched and the ui around that is pretty flashy and complicated.
 Home:
 TODO
 The existing ui is kind of weird.
-
-User Profiles:
-TODO
-These might require adding new features to the schema.
 ###

@@ -3,6 +3,9 @@ This document implements an imaginary UI for htop that could be renderered by a
 renderer. If you use Vim, you can install the syntax folder to get nice
 highlighting in this file. Without the highlighting, things can be really hard
 to read.
+
+Comments either start with # like Python are are sectioned between groups of
+three #s like this comment.
 ###
 
 ###
@@ -13,13 +16,17 @@ at install time. The schema cannot change while running the program.
 # First we'll create the dashboard at the top of htop.
 
 # We define a type called Widget. Widget has a handlful of constructors
-# separated by the | character.
+# separated by the | character. I've picked a weird mix of Haskell + Bash +
+# random other stuff for the syntax. It is definitely subject to change.
+
 # AskAtStart means you have some value which you can't know ahead of time but
-# won't change while the program is running.
+# won't change while the program is running. Some form of IPC will be used by
+# the renderer to query the AskAtStart endpoint in the app. This call (as well
+# as all others) will be made lazily by the renderer and in no particular
+# order.
 Widget = ProcessorUsage (n Int -max (AskAtStart -as "NumCPU") -min 1) (pct Double -unit "percent")
+        # Units are provided to simplify translation between different languages/locales.
        | MemoryUsage (used Int -unit "Byte") (total Int -unit "Byte")
-       # TBH I have no idea what the tasks widget does...
-       | Tasks (numTasks Int) (thr Int) (numRunning Int)
        | ...
 
 # Here we define how a Widget gets displayed. Most types can be displayed by
@@ -42,11 +49,17 @@ Widget interact as
     ProcessorUsage interact as
         # ! is syntax for editable.
         # !Variable means the underlying data can be edited. The renderer should
-        # create the correct UI to make this happen.
+        # create the correct UI to make this happen. For example, an editable
+        # string can provide an editable text box.
         !n
     # !Constructor is special syntax meaning you can edit a Widget by changing
-    # the constructor.
+    # the constructor. When picking a new constructor, the user will have the
+    # option to interact with any interactive fields on the new constructor
+    # before "submitting" the change. The renderer will query the ap to fill in
+    # any noninteractive fields.
+    # TODO should there be a "construct as" instead of reusing interact as?
     !Constructor -all
+
 
 
 # Now we're to the process list part of the UI.
@@ -64,7 +77,6 @@ Process = Process
     (time Time -precision: "Seconds")
     ...
 
-# This defines how an object can be interacted with by the user.
 Process interact as
     ###
     !{...} makes a clickable element. The hints flag can be used or ignored by
@@ -72,9 +84,11 @@ Process interact as
     "clicked". Destructive means it can't be undone. Remove means the data will
     likely be removed after clicking.
 
+    TODO I'm not sure I like the hints system. It feels adhoc yet important.
+
     Although I use the verb click, the user might be interacting in any number
     of ways. What matters is that interacting happens instantly and that
-    there's no data other than that it happening.
+    there's no data other than that it happened.
     ###
     !{Icon -path "stop.png" -help "End Process"} -hints {"destructive", "remove"}
     !pri
@@ -84,12 +98,12 @@ Process display as
     # Clipping the username at 8 is standard according to the internet.
     {pid, user -clipAt 8, pri, ni, virt, ..., time}
 
-# -uniqueBy can also take a list of fields to consider. "editable" is short for
-# anything that can be edited by the user.
-Dashboard = Dashboard (widgets [Widget] -uniqueBy "editable")
+# -uniqueBy can also take a tuple of fields to consider. "editable" is short
+# for anything that can be edited by the user.
+Dashboard = Dashboard (widgets [Widget] -uniqueBy {"editable"})
 
 Dashboard interact as
-    # The can* flags control what a it means for a list to be editable. The
+    # The can* flags control what it means for a list to be editable. The
     # renderer will automatically generate a UI for customizing the dashboard
     # thanks to those flags.
     !widgets -canAdd -canRemove -canReorder
@@ -97,7 +111,7 @@ Dashboard interact as
 Dashboard display as
     ###
     The mostlyConst flag tells the renderer that the list of widgets is
-    dynamic, but that changes are allowed to reflow the entire UI. This lets the
+    dynamic but that changes are allowed to reflow the entire UI. This lets the
     renderer delay the UI flow until it has received the contents of the
     Dashboard. Without the mostlyConst flag, the renderer would have to assume
     the worst possible case and flow the entire UI around that. Normally, a
@@ -112,12 +126,10 @@ Dashboard display as
 Htop = Htop (dashboard Dashboard) (processList [Process])
 
 Htop interact as
-    # The allElemEditable flag says that each element of the list should be
-    # interactive too.
-
-    # These flags are either client side or server side. It probably depends on
-    # whether the data all exists on the client or not.
-    !processList -filter -search -sort
+    # The !! says that something is editable and probably what the user wants
+    # to interact with by default. Only one element with !! should be displayed
+    # on the screen at a time. There's only one in htop so everything is simple.
+    !!processList -filter -search -sort
 
 Htop display as
     {dashboard, processList}
@@ -130,40 +142,37 @@ Renderers are lazy. Instead of asking for all of the data at startup, they'll
 ask the apps to send over parts of the data. Apps can leave holes that the
 renderer might want to fill in later. The example below assumes that all of the
 holes have been filled in. The ... syntax is my own laziness.
-
-TODO: Should I use syntax like (dashboad ...) or -dashboard ...? Basically, are
-data type constructors as defined above different from flags? Should I only
-have one of the two?
 ###
+
 Htop
     (dashboard Dashboard
-        [ ProcessorUsage (n 1) (pct 2.6)
-        , ProcessorUsage (n 2) (pct 3.5)
-        , ProcessorUsage (n 3) (pct 1.0)
-        , ProcessorUsage (n 4) (pct 100.0)
-        , MemoryUsage (used 3.07) (total 15.5)
-        , Tasks (numTasks 111) (thr 400) (numRunning 1)
+        [ ProcessorUsage -n 1 -pct 2.6
+        , ProcessorUsage -n 2 -pct 3.5
+        , ProcessorUsage -n 3 -pct 1.0
+        , ProcessorUsage -n 4 -pct 100.0
+        , MemoryUsage -used 3.07 -total 15.5
+        , Tasks -numTasks 111 -thr 400 -numRunning 1
         ]
     )
 
     (processList ProcessList
         [ Process
-            (pid 50)
-            (user "Jack")
-            (pri "2")
-            (ni "0")
-            (virt "100000")
+            -pid 50
+            -user "Jack"
+            -pri "2"
+            -ni "0"
+            -virt "100000"
             ...
-            (time "1980234") #<- Unix time stamp
+            -time "1980234" #<- Unix time stamp
             ...
         , Process
-            (pid 51)
-            (user "Jack")
-            (pri "2")
-            (ni "0")
-            (virt "100000")
+            -pid 51
+            -user "Jack"
+            -pri "2"
+            -ni "0"
+            -virt "100000"
             ...
-            (time "19804") #<- Unix time stamp
+            -time "19804" #<- Unix time stamp
             ...
         ...
         ]
@@ -174,10 +183,9 @@ How could we render this?
 
 Dashboard:
 Since the dashboard is mostly constant, we can analyze the data to decide how
-much space it should take up. Normally, we would have to assume that it might be
-empty one second and filled with a million elements the next. The mostlyConst
-flag means we can see that it only has a handful of elements and assign it a
-specific width and height.
+much space it should take up. Normally, we would have to assume that it might
+be filled with a million elements. The mostlyConst flag means we can see that
+it only has a handful of elements and assign it a specific width and height.
 
 Process list:
 We might have an infinite number of processes with infinitely long columns. This
@@ -185,19 +193,19 @@ list will ask for 100% width and 100% height. Since strings can be arbitrarily
 long, we'll orient the list vertically to avoid weird horizontal scrolling.
 
 Should the dashboard be to the left or above the process list? Since we know
-more about the dashboard, we'll focus on that one. Since the text largely fits
-on half a screen and progress bars don't get a lot of benefit from being
-exceptionally wide, we can likely orient the dashboard list as a kind of grid.
-After doing that, We can see that the width of the dashboard is larger than the
-height. In addition, it can use 100% of the width but can't use 100% of the
-height. That means we can give the process list (which asks for 100% in both
-dimensions) more of its requested space and we can avoid excessive whitespace by
-arranging the two elements vertically.
+more about the dashboard, we'll look from its point of view. Since the text
+largely fits on half a screen and progress bars don't get a lot of benefit from
+being exceptionally wide, we can likely orient the dashboard list as a kind of
+grid.  After doing that, We can see that the width of the dashboard is larger
+than the height. In addition, it can use 100% of the width but can't use 100%
+of the height. That means we can give the process list (which asks for 100% in
+both dimensions) more of its requested space and we can avoid excessive
+whitespace by arranging the two elements vertically.
 
 Although the above paragraph is pretty handwavy, it hopefully gives an idea
 about why a renderer might pick a certain orientation for elements. Imagine if
 the dashboard were extremely large and none of the elements were very wide. If
-the terminal screen were large enough, it might make sense to put the dashboard
+the terminal screen were wide enough, it might make sense to put the dashboard
 horizontal to the process list and have it scroll vertically parallel to the
 process list.
 
@@ -205,8 +213,7 @@ This opens a question about how much layout shenanigans we can pull before users
 become disoriented. In the tablet/mobile world, it seems acceptable to provide
 fairly different UI's when in portrait vs landscape. In landscape you get more
 views lined up side by side. If users are OK with that, then they'll probably
-understand the layout shifting to handle window size changes. Any layout change
-must keep the content they were looking at visible though.
+understand the layout shifting to handle window size changes.
 
 
 
@@ -238,13 +245,13 @@ Beyond the dashboard, there are a couple of pages in the app that are missing
 from the schema/type above. Specifically, the help and setup pages would be
 moved into an (unwritten) alternative schema. The current help page reads like
 a colorful man page. Although useful, a flat man page has its problems. For
-one, it disconnects the help text from the elements it
-provides help for. This hurts discoverability and accessibility.  Imagine a user
-that's interacting with the computer in a non-standard way. If a piece of help
-text were associated with the button or element it provided help for, then a
-screen reader could provide context on how the element would be used. Imagine
-another user that's never used the app before. They could press "?", just like
-they do on every new TUI app, to see the UI suddenly annotated with useful
+one, it disconnects the help text from the elements it provides help for. This
+hurts discoverability and accessibility.  Imagine a user that's interacting
+with the computer in a non-standard way. If a piece of help text were
+associated with the button or element it provided help for, then a screen
+reader could provide context on how the element would be used. Imagine another
+user that hass never used the app before. They could press "?", just like they
+do on every new TUI app, to see the UI suddenly annotated with useful
 information.
 
 Moving help text to a more generic format has other benefits. You could use it
@@ -270,7 +277,7 @@ preferences shared across devices.
 
 This also lets you control how preferences are loaded. If the program didn't use
 this UI system, it might not support sharing one config file across devices. For
-example, you might have one setting turned on for you phone but off on your
+example, you might have one setting turned on for your phone but off on your
 desktop. The rest of the settings are the same. The renderer could detect which
 device you're using and send different options based on how you've configured
 it. This feature would have implications for seamless handoff but it's hopefully

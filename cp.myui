@@ -7,31 +7,32 @@ Copy = Copy (from File) (to File -mustExist False) (followLinks Bool) (interacti
 Copy interact as
   # CommittedBy means to keep the changes local until another parameter is
   # interacted with.
-  !from -committedBy
+  !from -committedBy copy
   !to -committedBy copy
   !followLinks -committedBy copy
+  # I guess this is a named button?
   !!copy {Fstring -string "Copy"}
 
 ###
 The following is a verbose representation of the Copy program.
-Copy --from=myfile --to=otherfile --copy
+`Copy --from=myfile --to=otherfile --copy`
 
 If we don't name the parameters, they're assumed to be in the order they were
-made interactive. If you're ever curious about the order, check the help page
+made interactive. If you're ever curious about the order, the help page
 for the command will tell you.
-Copy myfile otherfile --copy
+`Copy myfile otherfile --copy`
 
 If we interact with something and it only gets committed when something else
-changes, the CLI will automatically interact with the committer assuming it
-doesn't take parameters.
-Copy myfile otherfile
+changes, the CLI will automatically interact with the committer after parsing
+the rest of the parameters assuming it doesn't take parameters.
+`Copy myfile otherfile`
 
 Commands must call a constructor and all constructors are upper case words, so
 maybe we can save the user some typing by making the case implicit?
-copy myfile otherfile
+`copy myfile otherfile`
 
 Finally, we could alias Copy to Cp to get
-cp myfile otherfile
+`cp myfile otherfile`
 ###
 
 List = List (directory File -mustBePath True) (files [File] -inside directory)
@@ -42,19 +43,19 @@ List display as
   {directory, files}
 
 ###
-Since List has a display as field, it will output text to the terminal. Since
+Since List has a "display as" block, it will output text to the terminal. Since
 Files are built in objects, the renderer will handle a lot of the flags
 normally used by ls.
 
 Ideally, list would look like a file manager in GUI mode. It's reasonable for a
 renderer to detect that directory is editable with a type of File and files
-contains a list of Files, so let the user easily change the directory using
-files.
+contains a list of Files, so let the user easily change the directory by double
+clicking on elements of files.
 
 In most file managers, you can right click to copy, move, etc. Implementing
 that kind of logic in List seems a little wrong. Maybe there exists a type
 registering system where different programs can announce that they have
-features for different types. Right clicking on a file uses that registry to
+features for different types. Right clicking on a type uses that registry to
 provide actions.
 
 This isn't a great solution though. The Unix command "mv" handles moving files
